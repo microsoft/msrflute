@@ -1,0 +1,13 @@
+torch
+mpi4py
+easydict
+scipy
+psutil
+transformers
+torchvision
+pandas
+h5py
+sphinx_rtd_theme
+azureml-core
+azureml-defaults
+pyyaml

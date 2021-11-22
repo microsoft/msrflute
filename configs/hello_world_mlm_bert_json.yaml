@@ -1,0 +1,158 @@
+# Basic configuration file for running mlm_bert example using json files in Azure ML.
+model_config:
+    model_type: BERT 
+    model_folder: experiments/mlm_bert/model.py
+    BERT:
+        loader_type: text
+        model:
+            model_name: roberta-large
+            cache_dir: ./cache_dir
+            use_fast_tokenizer: False
+            mask_token: <mask>
+            task: mlm
+            past_index: -1
+            prediction_loss_only: false
+            process_line_by_line: false
+        training:
+            seed: 12345
+            label_smoothing_factor: 0  
+            batch_size: 64
+            max_seq_length: 256            
+
+dp_config:
+    enable_local_dp: false
+    enable_global_dp: false
+    global_sigma: 0.35
+    grad_dir_eps: -1
+    grad_mag_eps: -1
+    weight_eps: 100
+    max_grad: 0.008
+    min_grad: 0.000001
+    max_weight: 0.5
+    min_weight: 0.0000001
+    weight_dp: scalarDP 
+
+server_config:
+    resume_from_checkpoint: true
+    do_profiling: false
+    fast_aggregation: true
+    wantRL: false
+    RL:
+        RL_path_global: false
+        marginal_update_RL: true
+        RL_path: ./RL_models
+        model_descriptor_RL: marginalUpdate
+        network_params: 300,128,128,128,64,100
+        initial_epsilon: 0.5
+        final_epsilon: 0.0001
+        epsilon_gamma: 0.90
+        max_replay_memory_size: 1000
+        minibatch_size: 16
+        gamma: 0.99
+        optimizer_config:
+            lr: 0.0003
+            type: adam
+            amsgrad: true
+        annealing_config:
+            type: step_lr
+            step_interval: epoch
+            step_size: 1
+            gamma: 0.95
+    optimizer_config:
+        lr: 0.00001
+        weight_decay: 0.01
+        type: adamW
+    annealing_config:
+        type: step_lr
+        step_interval: epoch
+        gamma: 1.0
+        step_size: 1000
+    val_freq: 4
+    rec_freq: 16
+    max_iteration: 10000
+    num_clients_per_iteration: 200
+    data_config:
+        val:
+            loader_type: text
+            val_data: <add path to data here>
+            task: mlm
+            mlm_probability: 0.25
+            tokenizer_type_fast: False
+            batch_size: 128
+            max_seq_length: 256
+            min_words_per_utt: 5
+            max_samples_per_user: 5000
+            mask_token: <mask>
+            num_workers: 0
+            prepend_datapath: false
+            cache_dir: ./cache_dir
+        train:
+            loader_type: text
+            train_data: null
+            train_data_server: null
+            desired_max_samples: null
+        test:
+            loader_type: text
+            test_data: <add path to data here>
+            task: mlm
+            mlm_probability: 0.25
+            tokenizer_type_fast: False
+            batch_size: 128
+            max_seq_length: 256
+            max_samples_per_user: 5000
+            mask_token: <mask>
+            num_workers: 0
+            prepend_datapath: false
+            cache_dir: ./cache_dir
+    type: model_optimization
+    aggregate_median: softmax
+    weight_train_loss: grad_mean_loss 
+    softmax_beta: 1.00
+    initial_lr_client: 0.00001
+    lr_decay_factor: 1.0
+    best_model_criterion: loss
+    fall_back_to_best_model: false
+    server_replay_config:
+        server_iterations: 50
+        optimizer_config:
+            lr: 0.00002
+            amsgrad: true
+            type: adam
+
+client_config:
+    meta_learning: basic
+    stats_on_smooth_grad: true
+    ignore_subtask: false
+    copying_train_data: false
+    do_profiling: false
+    data_config:
+        train:
+            loader_type: text
+            list_of_train_data: <add path to data here>
+            task: mlm
+            mlm_probability: 0.25
+            tokenizer_type_fast: False
+            batch_size: 24
+            max_seq_length: 256
+            min_words_per_utt: 5
+            desired_max_samples: 5000
+            mask_token: <mask>
+            num_workers: 0
+            num_frames: 0
+            max_grad_norm: 15.0
+            prepend_datapath: false
+            cache_dir: ./cache_dir
+            pin_memory: true
+    type: optimization
+    meta_optimizer_config:
+        lr: 0.01
+        type: adam
+    optimizer_config:
+        type: adamW
+        weight_decay: 0.01
+        amsgrad: true
+    annealing_config:
+        type: step_lr
+        step_interval: epoch
+        step_size: 2
+        gamma: 1.0

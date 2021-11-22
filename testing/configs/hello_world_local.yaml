@@ -1,0 +1,198 @@
+model_config:
+    model_type: GRU
+    model_folder: experiments/nlg_gru/model.py
+    embed_dim: 160
+    vocab_size: 10000
+    hidden_dim: 512
+    OOV_correct: false
+# Configuration for differential privacy
+dp_config:
+    # Local dp clips and adds noise on the client and centrally accumulates the privacy budget.
+    enable_local_dp: true 
+    eps: 100 # epsilon
+    max_grad: 0.008  # max gradient
+    # The max_weight and min_weight should be already scaled by weight_scaler
+    # Because we scale down the weight using weight_scalar -> clip -> add noise -> scale back up.
+    max_weight: 0.0001
+    weight_scaler: 0.0001
+    min_weight: 0.00009
+privacy_metrics_config:
+    apply_metrics: true
+    apply_indices_extraction: true
+    # If we extracting word indices we want to consider the rank (sorted freq to rare)
+    # of the words extracted. Any word that rank above this value is considered privacy risk
+    allowed_word_rank: 9000    
+    apply_leakage_metric: true
+    max_leakage: 30
+    max_allowed_leakage: 3
+    # take the 95th percentile of the leakage for the next round.
+    adaptive_leakage_threshold: 0.95
+    is_leakage_weighted: true
+    attacker_optimizer_config:
+        lr: 0.03
+        type: adamax
+        amsgrad: false
+# server_config determines all the server-side settings
+server_config:
+    wantRL: false  # use reinforcement learning to train the optimizer?
+    resume_from_checkpoint: true # if a checkpoint is available start from this iteration?
+    do_profiling: false  # enable to capture profiling information during server updates. Will generate a lot of logging
+    RL:  # configuration for server-side RL.  Ignored if wantRL is false
+        marginal_update_RL: true
+        RL_path: ./RL_models
+        model_descriptor_RL: marginalUpdate
+        network_params: 300,128,128,128,64,100
+        initial_epsilon: 0.5
+        final_epsilon: 0.0001
+        epsilon_gamma: 0.90
+        max_replay_memory_size: 1000
+        minibatch_size: 16
+        gamma: 0.99
+        optimizer_config:
+            lr: 0.0003
+            type: adam
+            amsgrad: true
+        annealing_config:
+            type: step_lr
+            step_interval: epoch
+            step_size: 1
+            gamma: 0.95
+    # configuration for the server-side optimizer. 
+    optimizer_config:
+        # this section for sgd
+        #type: sgd 
+        #lr: 0.001
+        # this section for adam
+        type: adamax
+        amsgrad: true
+        lr: 0.0005     
+        # this section for adamax
+        #type: adamax
+        #amsgrad: true
+        #lr: 0.002   
+        # this section for lamb
+        #lr: 0.1
+        #weight_decay: 0.0 #0.005
+        #type: lamb
+    # This section configures how the learning rate decays
+    annealing_config:
+        type: step_lr
+        step_interval: epoch 
+        gamma: 0.99  # decrease the learning rate gamma * lambda
+        step_size: 100  # apply gamma every step_size iterations
+    val_freq: 3  # evaluate validation set once every val_freq rounds
+    rec_freq: 3 # evaluate test set once every rec_freq rounds
+    max_iteration: 3  # total rounds of FL
+    num_clients_per_iteration: 5  # number of clients to sample per round
+    # server-side data configuration
+    # we load all the data server side, but training data config is configured in the client config.
+    data_config:
+        # validation data
+        val:
+            batch_size: 128
+            loader_type: text
+            tokenizer_type: not_applicable
+            prepend_datapath: false
+            val_data: ./data/val/val_data.json
+            vocab_dict: ./models/vocab_reddit.vocab
+            pin_memory: true
+            # num_workers indicates how many workers are used for creating batches.
+            # we've found that batch creation is very fast for small models and it's not 
+            # worth the overhead to create new worker processes.  For large models 
+            # with a lot of data per client it might be more efficient to set this larger.
+            # run with profiling enabled and see if a lot of time is spent in process creation/teardown
+            num_workers: 0
+            num_frames: 2400
+            desired_num_samples: null
+            max_batch_size: 128
+            max_num_words:  25
+            unsorted_batch: true
+        # Note this is NOT the main training data configuration, which is configured in the 
+        # client config.  This section is ignored unless you are running replay data.
+        # If you want to run replay data- set a path name for train_data_server.
+        train:
+            batch_size: 128
+            loader_type: text
+            tokenizer_type: not_applicable
+            prepend_datapath: false
+            train_data: null
+            train_data_server: null
+            vocab_dict: ./models/vocab_reddit.vocab
+            pin_memory: true
+            num_workers: 0
+            num_frames: 2400
+            desired_max_samples: 500
+            max_grad_norm: 10.0
+            max_batch_size: 128
+            max_num_words:  25
+            unsorted_batch: true
+        # test data configuration
+        test:
+            batch_size: 128
+            loader_type: text
+            tokenizer_type: not_applicable
+            prepend_datapath: false
+            train_data: null
+            train_data_server: null
+            test_data: ./data/test/test_data.json
+            vocab_dict: ./models/vocab_reddit.vocab
+            pin_memory: true
+            num_workers: 0
+            max_batch_size: 128
+            max_num_words:  25
+            unsorted_batch: true    
+    type: model_optimization  
+    aggregate_median: softmax  # the FL aggregation method
+    weight_train_loss: grad_mean_loss #train_loss #grad_mean_loss #or train_loss - how each client's weight is determined.
+    softmax_beta: 1000
+    initial_lr_client: 0.1
+    lr_decay_factor: 1.0
+    best_model_criterion: loss  # choose best model based on minimal loss, for checkpointing
+    fall_back_to_best_model: false  # if a model degrades, use the previous best
+    # replay configuration.  This is only applied if the server-side training data is fully configured and loaded.
+    server_replay_config:
+        server_iterations: 50
+        optimizer_config:
+            lr: 0.00002
+            amsgrad: true
+            type: adam
+# end server config
+# client config dictates the learning parameters for client-side model updates
+# most parameters are similar to the server config.
+# Note the core training data is defined in this config.
+client_config:
+    meta_learning: basic
+    stats_on_smooth_grad: true
+    ignore_subtask: false
+    num_skips_threshold: 10
+    copying_train_data: false
+    do_profiling: false  # set to true to performance profile client-side training.
+    data_config:
+        # this is the main training data configuration
+        train:
+            batch_size: 128
+            loader_type: text
+            tokenizer_type: not_applicable
+            prepend_datapath: false
+            list_of_train_data: ./data/train/train_data.json
+            vocab_dict: ./models/vocab_reddit.vocab
+            pin_memory: true
+            num_workers: 0
+            num_frames: 2400
+            desired_max_samples: 500
+            max_grad_norm: 10.0
+            max_batch_size: 128
+            max_num_words:  25
+            unsorted_batch: true
+            utterance_mvn: false
+    type: optimization
+    meta_optimizer_config:
+        lr: 1.0
+        type: sgd
+    optimizer_config:
+        type: sgd
+    annealing_config:
+        type: step_lr
+        step_interval: epoch
+        step_size: 1
+        gamma: 1.0

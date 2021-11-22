@@ -1,0 +1,125 @@
+# Basic configuration file for running locally nlg_gru example using json files.
+model_config:
+    model_type: GRU
+    model_folder: experiments/nlg_gru/model.py
+    pretrained_model_path: <add path to pretrained weights here>
+    embed_dim: 160
+    vocab_size: 10000
+    hidden_dim: 512
+    OOV_correct: false
+
+dp_config:
+    enable_local_dp: false
+
+privacy_metrics_config:
+    apply_metrics: false
+
+server_config:   
+    wantRL: false
+    resume_from_checkpoint: true
+    do_profiling: false   
+    optimizer_config:
+        type: lamb
+        lr: 0.1
+        weight_decay: 0.005
+    annealing_config:
+        type: step_lr
+        step_interval: epoch
+        gamma: 1.0
+        step_size: 100
+    val_freq: 2
+    rec_freq: 4
+    max_iteration: 11
+    num_clients_per_iteration: 10
+    data_config:
+        val:
+            batch_size: 2048
+            loader_type: text
+            tokenizer_type: not_applicable
+            prepend_datapath: false
+            val_data: <add path to data here>
+            vocab_dict: <add path to vocab here>
+            pin_memory: true
+            num_workers: 0
+            num_frames: 2400
+            max_batch_size: 2048
+            max_num_words:  25
+            unsorted_batch: true
+        train:  
+            batch_size: 128
+            loader_type: text
+            tokenizer_type: not_applicable
+            prepend_datapath: false
+            train_data: null
+            train_data_server: null
+            vocab_dict: <add path to vocab here>
+            pin_memory: true
+            num_workers: 0
+            num_frames: 2400
+            desired_max_samples: 500
+            max_grad_norm: 10.0
+            max_batch_size: 128
+            max_num_words:  25
+            unsorted_batch: true
+        test:
+            batch_size: 2048
+            loader_type: text
+            tokenizer_type: not_applicable
+            prepend_datapath: false
+            train_data: null
+            train_data_server: null
+            test_data: <add path to data here>
+            vocab_dict: <add path to vocab here>
+            pin_memory: true
+            num_workers: 0
+            max_batch_size: 2048
+            max_num_words:  25
+            unsorted_batch: true
+    type: model_optimization
+    aggregate_median: softmax
+    weight_train_loss: train_loss
+    softmax_beta: 20.0
+    initial_lr_client: 1.0
+    lr_decay_factor: 1.0
+    best_model_criterion: loss
+    fall_back_to_best_model: false
+    server_replay_config:
+        server_iterations: 50
+        optimizer_config:
+            type: adam
+            lr: 0.00002
+            amsgrad: true
+
+client_config:
+    meta_learning: basic
+    stats_on_smooth_grad: true
+    ignore_subtask: false
+    num_skips_threshold: 10
+    copying_train_data: false
+    do_profiling: false
+    data_config:
+        train:
+            batch_size: 64
+            loader_type: text
+            tokenizer_type: not_applicable
+            prepend_datapath: false
+            list_of_train_data: <add path to data here>
+            vocab_dict: <add path to vocab here>
+            pin_memory: true
+            num_workers: 0
+            desired_max_samples: 50000
+            max_grad_norm: 20.0
+            max_batch_size: 128
+            max_num_words:  25
+            unsorted_batch: true
+    type: optimization
+    meta_optimizer_config:
+        lr: 1.0
+        type: sgd
+    optimizer_config:
+        type: sgd
+    annealing_config:
+        type: step_lr
+        step_interval: epoch
+        step_size: 1
+        gamma: 1.0

@@ -1,0 +1,21 @@
+THIRD-PARTY SOFTWARE NOTICES AND INFORMATION
+Do Not Translate or Localize
+
+This software incorporates components from the projects listed below. The original copyright notices
+and the licenses under which Microsoft received such components are set forth below and are provided for 
+informational purposes only. Microsoft reserves all rights not expressly granted herein, whether by 
+implication, estoppel or otherwise.
+
+This software includes parts of the Huggingface/Transformers Library (https://github.com/huggingface/transformers). 
+State-of-the-art of  Natural Language Processing for Jax, PyTorch and TensorFlow. Huggingface/Transformers library is 
+licensed under Apache License 2.0, you can find a copy of this license at https://github.com/huggingface/transformers/blob/master/LICENSE
+
+This software includes parts of the Tensorflow/Privacy Library (https://github.com/tensorflow/privacy). 
+A library that includes implementations of TensorFlow optimizers for training machine learning models with
+differential privacy. The Tensorflow/Privacy library is licensed under Apache License 2.0, 
+you can find a copy of this license at https://github.com/tensorflow/privacy/blob/master/LICENSE
+
+This software includes parts of LEAF Library (https://github.com/TalwalkarLab/leaf).
+A Benchmark for Federated Settings. LEAF library is licensed under BSD 2-Clause License, you can find a copy
+of this license at https://github.com/TalwalkarLab/leaf/blob/master/LICENSE.md
+

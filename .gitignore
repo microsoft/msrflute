@@ -1,0 +1,6 @@
+__pycache__/
+.vscode/
+doc/sphinx/_build
+testing/logs.txt
+testing/outputs
+testing/mockup
