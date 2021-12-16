@@ -13,6 +13,7 @@ FLUTE is a pytorch-based orchestration environment enabling GPU or CPU-based FL 
 - a variety of standard optimizers and aggregation methods
 - most model types including CNNs, RNNs, and Huggingface Transformers.
 - extensibility, enabling new models, dataloaders, optimizers, and aggregators.
+- local or cloud-based job staging using AzureML
 
 ## Quick Start
 
