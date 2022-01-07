@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Data Preparation &mdash; FLUTE  documentation</title><link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+        <script type="text/javascript" src="_static/jquery.js"></script>
+        <script type="text/javascript" src="_static/underscore.js"></script>
+        <script type="text/javascript" src="_static/doctools.js"></script>
+        <script type="text/javascript" src="_static/language_data.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Adding New Scenarios" href="scenarios.html" />
+    <link rel="prev" title="FLUTE Overview" href="overview.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="index.html" class="icon icon-home"> FLUTE
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="overview.html">FLUTE Overview</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Data Preparation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="scenarios.html">Adding New Scenarios</a></li>
+<li class="toctree-l1"><a class="reference internal" href="advanced.html">Advanced Topics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="reference.html">Option Reference</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">FLUTE</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
+      <li>Data Preparation</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/dataprep.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="data-preparation">
+<h1>Data Preparation<a class="headerlink" href="#data-preparation" title="Permalink to this headline">¶</a></h1>
+<p>TODO: formatting for other data loaders.</p>
+<p>Here is a sample data blob for language model training.</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="nt">&quot;users&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;bert&quot;</span><span class="p">,</span><span class="s2">&quot;elmo&quot;</span><span class="p">],</span><span class="w"></span>
+<span class="w">    </span><span class="nt">&quot;user_data&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">        </span><span class="nt">&quot;bert&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;x&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;my name is Bert.&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;I live with Ernie.&quot;</span><span class="p">]},</span><span class="w"></span>
+<span class="w">        </span><span class="nt">&quot;elmo&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;x&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;Big Bird is my friend.&quot;</span><span class="p">]}</span><span class="w"></span>
+<span class="w">    </span><span class="p">},</span><span class="w"></span>
+<span class="w">    </span><span class="nt">&quot;num_samples&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">]</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span>
+</pre></div>
+</div>
+<p>The blob consists of three fields.  The <code class="docutils literal notranslate"><span class="pre">users</span></code> field indicates a unique id for each user in the training data.  Users are sampled uniformly to create client tasks during training. There could be many more users than client tasks per round or even over all client tasks over all rounds. The <code class="docutils literal notranslate"><span class="pre">user_data</span></code> field contains user-indexed training data. Each user’s data is a dictionary of the form <code class="docutils literal notranslate"><span class="pre">{&quot;x&quot;:</span> <span class="pre">[list</span> <span class="pre">of</span> <span class="pre">examples]}</span></code>.  Finally, the <code class="docutils literal notranslate"><span class="pre">num_samples</span></code> field indicates the number of samples for each user, in order of the <code class="docutils literal notranslate"><span class="pre">users</span></code> list.  That is, for any index <code class="docutils literal notranslate"><span class="pre">i</span></code> in <code class="docutils literal notranslate"><span class="pre">range(len(data['users']))</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;num_samples&#39;</span><span class="p">][</span><span class="n">i</span><span class="p">]</span> <span class="o">==</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;user_data&#39;</span><span class="p">][</span><span class="n">data</span><span class="p">[</span><span class="s1">&#39;users&#39;</span><span class="p">][</span><span class="n">i</span><span class="p">]][</span><span class="s1">&#39;x&#39;</span><span class="p">])</span>
+</pre></div>
+</div>
+<p>Test and validation data is formatted similarly.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Test/validate data is dispatched to workers by partitioning on users. If your test data isn’t user-partitioned, we recommend partitioning it uniformly using some dummy user ids.</p>
+</div>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="overview.html" class="btn btn-neutral float-left" title="FLUTE Overview" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="scenarios.html" class="btn btn-neutral float-right" title="Adding New Scenarios" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2021, Microsoft Research.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

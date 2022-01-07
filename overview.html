@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FLUTE Overview &mdash; FLUTE  documentation</title><link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+        <script type="text/javascript" src="_static/jquery.js"></script>
+        <script type="text/javascript" src="_static/underscore.js"></script>
+        <script type="text/javascript" src="_static/doctools.js"></script>
+        <script type="text/javascript" src="_static/language_data.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Data Preparation" href="dataprep.html" />
+    <link rel="prev" title="Welcome to FLUTE documentation!" href="index.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="index.html" class="icon icon-home"> FLUTE
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">FLUTE Overview</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#architecture">Architecture</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="dataprep.html">Data Preparation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="scenarios.html">Adding New Scenarios</a></li>
+<li class="toctree-l1"><a class="reference internal" href="advanced.html">Advanced Topics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="reference.html">Option Reference</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">FLUTE</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
+      <li>FLUTE Overview</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/overview.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="flute-overview">
+<h1>FLUTE Overview<a class="headerlink" href="#flute-overview" title="Permalink to this headline">¶</a></h1>
+<p>FLUTE uses a distributed processing architecture backed by OpenMPI.  An FLUTE job consists of one or more nodes (physical or virtual machines) executing a total of K workers (independent OS-level processes).</p>
+<p>Worker 0 acts as a central orchestrator, maintaining and distributing a central model to workers, and subsequently distributing client tasks to the workers.</p>
+<p>Each worker&gt;0 processes client tasks sequentially, consisting of data encoding and one or more batch updates to the central model (note the central model is reset to its original state for each client task). As each client task completes, the model delta, aka the pseudo-gradient is sent back to the orchestrator for federation into a new central model.</p>
+<p>Execution runs for up to N training rounds.  In each round the orchestrator may sample a subset of clients, and may also randomly delay pseudo-gradient updates from some clients to future rounds. The orchestrator will also periodically distribute evaluation tasks to determine model quality on validation and test data.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>AzureML generally expects there will be one worker per GPU on each node.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Due to networking overhead, it is often faster to run jobs on a single node with 8 or 16 GPUs, rather than on multiple nodes.</p>
+</div>
+<section id="architecture">
+<h2>Architecture<a class="headerlink" href="#architecture" title="Permalink to this headline">¶</a></h2>
+<figure class="align-default" id="id1">
+<a class="reference internal image-reference" href="_images/concepts.png"><img alt="_images/concepts.png" src="_images/concepts.png" style="width: 400px;" /></a>
+<figcaption>
+<p><span class="caption-text">An FLUTE job consists of one or more independent nodes (multi-GPU VMs) executing up to K workers.</span><a class="headerlink" href="#id1" title="Permalink to this image">¶</a></p>
+</figcaption>
+</figure>
+<figure class="align-default" id="id2">
+<a class="reference internal image-reference" href="_images/client-server.png"><img alt="_images/client-server.png" src="_images/client-server.png" style="width: 600px;" /></a>
+<figcaption>
+<p><span class="caption-text">On each training round the orchestrator (Worker 0) dispatches the central model to the rest of the workers, and then queues up client tasks for workers to execute. Workers receive client tasks (client training data and training config) and execute SGD on the central model using their client’s training data, sending the model delta (pseudo-gradient) back to the orchestrator.</span><a class="headerlink" href="#id2" title="Permalink to this image">¶</a></p>
+</figcaption>
+</figure>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="index.html" class="btn btn-neutral float-left" title="Welcome to FLUTE documentation!" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="dataprep.html" class="btn btn-neutral float-right" title="Data Preparation" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2021, Microsoft Research.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
