@@ -2,6 +2,19 @@
 
 Welcome to FLUTE (Federated Learning Utilities for Testing and Experimentation), a platform for conducting high-performance federated learning simulations.
 
+## Features
+
+FLUTE is a pytorch-based orchestration environment enabling GPU or CPU-based FL simulations.  The primary goal of FLUTE is to enable researchers to rapidly prototype and validate their ideas.  Features include:
+
+- large scale simulation (millions of clients, sampling tens of thousands per round)
+- multi-GPU and multi-node orchestration
+- local or global differential privacy
+- model quantization
+- a variety of standard optimizers and aggregation methods
+- most model types including CNNs, RNNs, and Huggingface Transformers.
+- extensibility, enabling new models, dataloaders, optimizers, and aggregators.
+- local or cloud-based job staging using AzureML
+
 ## Quick Start
 
 Install the requirements stated inside of `requirements.txt`. Ideally this sould be done inside of a virtual environment, for instance, using Anaconda.
