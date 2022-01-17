@@ -1,5 +1,5 @@
 FLUTE Overview
-============
+==============
 
 FLUTE uses a distributed processing architecture backed by OpenMPI.  An FLUTE job consists of one or more nodes (physical or virtual machines) executing a total of K workers (independent OS-level processes).
 
