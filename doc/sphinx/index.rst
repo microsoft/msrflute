@@ -11,7 +11,6 @@ Welcome to FLUTE documentation!
    :caption: Contents:
 
    overview
-   quickstart
    dataprep
    scenarios
    advanced
