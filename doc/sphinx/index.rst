@@ -15,6 +15,7 @@ Welcome to FLUTE documentation!
    scenarios
    advanced
    reference
+   class_reference
 
 Indices and tables
 ==================
