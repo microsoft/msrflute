@@ -22,16 +22,13 @@ model_config:
 dp_config:
     enable_local_dp: false
     enable_global_dp: false
+    eps: 100 
     global_sigma: 0.35
-    grad_dir_eps: -1
-    grad_mag_eps: -1
-    weight_eps: 100
+    weight_scaler: 0.0001    
     max_grad: 0.008
-    min_grad: 0.000001
     max_weight: 0.5
     min_weight: 0.0000001
-    weight_dp: scalarDP 
-
+    
 server_config:
     resume_from_checkpoint: true
     do_profiling: false

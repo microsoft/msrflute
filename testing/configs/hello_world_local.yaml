@@ -103,7 +103,7 @@ server_config:
             # run with profiling enabled and see if a lot of time is spent in process creation/teardown
             num_workers: 0
             num_frames: 2400
-            desired_num_samples: null
+            desired_max_samples: null
             max_batch_size: 128
             max_num_words:  25
             unsorted_batch: true

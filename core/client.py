@@ -53,7 +53,12 @@ from experiments import make_model
 _data_dict = None
 _file_ext = None
 
+
 class Client:
+    # It's unclear why, but sphinx refuses to generate method docs
+    # if there is no docstring for this class.
+    """Client class for specifying individual client training tasks"""
+
     def __init__(self, client_id, config, send_gradients, dataloader):
         '''
         Client side processing: computing gradients, update the model and send them back to the server

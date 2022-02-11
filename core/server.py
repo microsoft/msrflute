@@ -625,16 +625,16 @@ class OptimizationServer(federated.Server):
                         'secsPerClient',
                         'secsPerClientTraining',
                         'secsPerClientFull',
-                        'secsPerClientSetup'
+                        'secsPerClientSetup',
                         'mpiCosts',
                     ]
 
                     for metric in metrics_for_stats:
-                        log_metric(f'{metric}Mean', np.mean(self.run_metrics[metric][-1]))
-                        log_metric(f'{metric}Median', np.median(self.run_metrics[metric][-1]))
-                        log_metric(f'{metric}Max', max(self.run_metrics[metric][-1]))
+                        log_metric(f'{metric}Mean', np.mean(self.run_stats[metric][-1]))
+                        log_metric(f'{metric}Median', np.median(self.run_stats[metric][-1]))
+                        log_metric(f'{metric}Max', max(self.run_stats[metric][-1]))
 
-                    for k in self.run_metrics:
+                    for k in self.run_stats:
                         if k in metrics_for_stats:
                             print_rank('{}: {}'.format(k, max(self.run_stats[k][-1])), loglevel=logging.DEBUG)
                         else:

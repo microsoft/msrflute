@@ -19,6 +19,7 @@ import torch
 from azureml.core import Run
 
 from core import federated
+from core.config import FLUTEConfig
 from core.server import select_server
 from core.client import Client
 from core.globals import TRAINING_FRAMEWORK_TYPE, logging_level, define_file_type
@@ -42,7 +43,7 @@ from config_file_parser import (
 assert TRAINING_FRAMEWORK_TYPE == "mpi", "Unsupported platform {}".format(TRAINING_FRAMEWORK_TYPE)
 
 
-def log_run_properties(config):
+def log_run_properties(config: FLUTEConfig):
     """Log parameters on AzureML.
     
     Args:
@@ -50,16 +51,6 @@ def log_run_properties(config):
     """
 
     properties = {}
-
-    def lookup(key, cfg, default):
-        """Look for key on dict"""
-        keys = key.split(".")
-        if len(keys) == 1:
-            return cfg.get(key, default)
-        if keys[0] in cfg:
-            return lookup(".".join(keys[1:]), cfg[keys[0]], default)
-        else:
-            return default
 
     # Build properties dictionary
     mem = virtual_memory()
@@ -81,7 +72,7 @@ def log_run_properties(config):
     ]
 
     for (key, default) in props:
-        properties[key] = lookup(key, config, default)
+        properties[key] = config.lookup(key, default)
 
     # Log the properties dictionary into AzureML
     run = Run.get_context()
@@ -183,19 +174,6 @@ def run_worker(model_path, config, task, data_path, local_rank):
         worker.run()
 
 
-def _reconcile_args(args, config):
-    '''Change parameters depending on command-line arguments'''
-
-    if args.dp_config_grad_dir_eps:
-        config["dp_config"]["grad_dir_eps"] = args.dp_config_grad_dir_eps
-    if args.dp_config_grad_mag_eps:
-        config["dp_config"]["grad_mag_eps"] = args.dp_config_grad_mag_eps
-    if args.dp_config_weight_eps:
-        config["dp_config"]["weight_eps"] = args.dp_config_weight_eps
-
-    return config
-
-
 if __name__ == "__main__":
     # Parse command-line arguments
     parser = argparse.ArgumentParser()
@@ -205,9 +183,6 @@ if __name__ == "__main__":
     parser.add_argument("-task", default=None, help="Define the task for the run")
     parser.add_argument("-num_skip_decoding", default=-1, type=int, help="Skip decoding in unsupervised learning mode")
     parser.add_argument("--local_rank", default=-1, type=int)
-    parser.add_argument("--dp_config_grad_dir_eps", default=None, type=float, help="DP direction epsilon")
-    parser.add_argument("--dp_config_grad_mag_eps", default=None, type=float, help="DP magnitude epsilon")
-    parser.add_argument("--dp_config_weight_eps", default=None, type=float, help="DP weight epsilon")
 
     args = parser.parse_args()
     data_path = args.dataPath
@@ -272,8 +247,8 @@ if __name__ == "__main__":
     init_logging(log_path, loglevel=logging_level)
 
     with open(args.config) as f:
-        config = yaml.safe_load(f)
-        config = _reconcile_args(args, config)  # replace params. depending on CL args.
+        cfg_dict = yaml.safe_load(f)
+        config = FLUTEConfig.from_dict(cfg_dict)
 
         assert "num_clients" not in config["server_config"]["data_config"], "Remove \"num_clients\" from server data_config since this is a reserved key"
         assert "num_clients" not in config["client_config"]["data_config"], "Remove \"num_clients\" from client data_config since this is a reserved key"
