@@ -29,6 +29,8 @@ server_config:
         step_size: 100
     val_freq: 2
     rec_freq: 4
+    initial_val : true
+    initial_freq: false
     max_iteration: 11
     num_clients_per_iteration: 10
     data_config:
