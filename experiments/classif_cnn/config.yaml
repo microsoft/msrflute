@@ -8,6 +8,8 @@ dp_config:
 privacy_metrics_config:
     apply_metrics: false                               # cache data to compute additional metrics
 
+strategy: DGA
+
 server_config:   
     wantRL: false                                      # whether to use RL-based meta-optimizers
     resume_from_checkpoint: false                      # restart from checkpoint if file exists
@@ -42,6 +44,7 @@ server_config:
     weight_train_loss: train_loss
     best_model_criterion: f1_score
     fall_back_to_best_model: false
+    softmax_beta: 1.0
 
 client_config:
     do_profiling: false                                # run profiling and compute runtime metrics

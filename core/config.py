@@ -405,6 +405,7 @@ class FLUTEConfig(Config):
     model_config: ModelConfig = None
     dp_config: PrivacyConfig = None
     privacy_metrics_config: PrivacyMetricsConfig = None
+    strategy: str = None
     server_config: ServerConfig = None
     client_config: ClientConfig = None
 
@@ -418,9 +419,11 @@ class FLUTEConfig(Config):
             PrivacyMetricsConfig.from_dict(config['privacy_metrics_config']) \
             if 'privacy_metrics_config' in config else None
 
+        strategy = config.get('strategy', 'DGA')
+
         return FLUTEConfig(
             ModelConfig.from_dict(config['model_config']),
-            dp_config, priv_metrics_config,
+            dp_config, priv_metrics_config, strategy,
             ServerConfig.from_dict(config['server_config']),
             ClientConfig.from_dict(config['client_config'])
         )
