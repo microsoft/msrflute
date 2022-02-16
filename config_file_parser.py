@@ -30,9 +30,7 @@ def check_server_config(config, default_server_conf):
         server_type == "cluster_parallel") :
         raise ValueError("Invalid server type {} in federated learning config".format(server_type))
 
-    assert config["server_config"]["best_model_criterion"] == "loss" or \
-           config["server_config"]["best_model_criterion"] == "cer", \
-            "Invalid model criterion {}".format(config["server_config"]["best_model_criterion"])
+    assert "best_model_criterion" in config["server_config"], "Missing \"best_model_criterion\" in server config"
 
     if server_type == "model_optimization" or server_type == "cluster_finetuning" or server_type == "cluster_parallel":
         assert "initial_lr_client" in config["server_config"], "Missing \"initial_lr_client\" in server config"

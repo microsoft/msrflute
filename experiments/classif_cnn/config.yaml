@@ -22,6 +22,8 @@ server_config:
         step_size: 100
     val_freq: 50                                       # how many iterations between metric eval on val set
     rec_freq: 100                                      # how many iterations between metric eval on test set
+    initial_val: true
+    initial_rec: true
     max_iteration: 2000                                # how many iterations in total
     num_clients_per_iteration: 10                      # how many clients per iteration
     data_config:                                       # where to get val and test data from
@@ -38,7 +40,7 @@ server_config:
     initial_lr_client: 0.001                           # learning rate used on client optimizer
     lr_decay_factor: 1.0
     weight_train_loss: train_loss
-    best_model_criterion: loss
+    best_model_criterion: f1_score
     fall_back_to_best_model: false
 
 client_config:

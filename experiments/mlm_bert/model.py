@@ -273,7 +273,7 @@ class BERT(T.nn.Module):
                                             description="Evaluation",
                                             ignore_keys=ignore_keys,
                                             metric_key_prefix=metric_key_prefix)
-        return (output['eval_loss'], output['eval_acc'], batch_size[0])
+        return {'output':output['eval_loss'], 'val_acc': output['eval_acc'], 'batch_size': batch_size[0]}
 
 
 

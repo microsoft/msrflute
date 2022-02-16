@@ -25,7 +25,7 @@ if TRAINING_FRAMEWORK_TYPE == 'mpi':
     import core.federated as federated
 else:
     raise NotImplementedError('{} is not supported'.format(TRAINING_FRAMEWORK_TYPE))
-
+from core.evaluation import Evaluation
 from core.client import Client
 from .trainer import (
     ModelUpdater,
@@ -96,7 +96,11 @@ class OptimizationServer(federated.Server):
             else [server_config['num_clients_per_iteration']]
 
         self.val_freq = server_config['val_freq']
-        self.rec_freq = server_config['rec_freq']
+        self.req_freq = server_config['rec_freq']
+
+        self.evaluation = Evaluation(config, model_path, self.process_testvalidate, val_dataloader, test_dataloader)
+        self.metrics = dict()
+
         self.model_backup_freq = server_config.get('model_backup_freq', 100)
         self.worker_trainer_config = server_config.get('trainer_config', {})
 
@@ -129,9 +133,7 @@ class OptimizationServer(federated.Server):
             model_type=self.model_type,
             decoder_config=decoder_config
         )
-
-        self.val_dataloader = val_dataloader
-
+        self.metrics['worker_trainer'] = self.worker_trainer
         # Creating an instance for the server-side trainer (runs mini-batch SGD)
         self.server_replay_iterations = None
         self.server_trainer = None
@@ -166,10 +168,6 @@ class OptimizationServer(federated.Server):
             'best_val_{}_model.tar'.format(self.best_model_criterion))
         self.log_path = os.path.join(self.model_path, 'status_log.json')
         self.cur_iter_no = 0  # keep the iteration number for Tensor board plotting
-        self.best_val_loss= float('inf')
-        self.best_val_acc = -1.0
-        self.best_test_loss= float('inf')
-        self.best_test_acc= -1.0
         self.lr_weight = 1.0
 
         self.weight_sum_stale = 0.0
@@ -184,7 +182,6 @@ class OptimizationServer(federated.Server):
             self.load_saved_status()
 
         # Decoding config
-        self.test_dataloader = test_dataloader
         self.decoder_config = decoder_config
         self.spm_model = server_config['data_config']['test'].get('spm_model', None)
 
@@ -219,95 +216,14 @@ class OptimizationServer(federated.Server):
             with open(self.log_path, 'r') as logfp:  # loading the iteration no., best loss and CER
                 elems = json.load(logfp)
                 self.cur_iter_no = elems.get('i', 0)
-                self.best_val_loss = elems.get('best_val_loss', float('inf'))
-                self.best_val_acc = elems.get('best_val_acc', float('inf'))
-                self.best_test_loss = elems.get('best_test_loss', float('inf'))
-                self.best_test_acc = elems.get('best_test_acc', float('inf'))
+                self.metrics['best_val_loss'] = elems.get('best_val_loss', float('inf')) 
+                self.metrics['best_val_acc'] = elems.get('best_val_acc', float('inf'))
+                self.metrics['best_test_loss'] = elems.get('best_test_loss', float('inf'))
+                self.metrics['best_test_acc'] = elems.get('best_test_acc', float('inf'))
                 self.lr_weight = elems.get('weight', 1.0)
                 self.no_label_updates = elems.get('num_label_updates', 0)
                 print_rank(f'Resuming from status_log: cur_iter: {self.cur_iter_no}')
-
-    def make_eval_clients(self, dataloader):
-        '''Generator that yields clients for evaluation, continuously.
-
-        Args:
-            dataloader (torch.utils.data.DataLoader): used to get client's data
-        '''
-
-        total = sum(dataloader.dataset.num_samples)
-        clients = federated.size() - 1
-        delta = total / clients + 1
-        threshold = delta
-        current_users_idxs = list()
-        current_total = 0
-
-        # Accumulate users until a threshold is reached to form client
-        for i in range(len(dataloader.dataset.user_list)):
-            current_users_idxs.append(i)
-            count = dataloader.dataset.num_samples[i]
-            current_total += count
-            if current_total > threshold:
-                print_rank(f'sending {len(current_users_idxs)} users', loglevel=logging.DEBUG)
-                yield Client(current_users_idxs, self.config, False, dataloader)
-                current_users_idxs = list() 
-                current_total = 0
-
-        if len(current_users_idxs) != 0:
-            print_rank(f'sending {len(current_users_idxs)} users -- residual', loglevel=logging.DEBUG)
-            yield Client(current_users_idxs, self.config, False, dataloader)
-
-    def run_distributed_evaluation(self, dataloader, mode):
-        '''Perform evaluation using available workers.
-        
-        See also `process_test_validate` on federated.py.
-
-        Args:
-            dataloader (torch.utils.data.DataLoader): used to fetch data.
-            mode (str): `test` or `val`.
-        '''
-        val_clients = list(self.make_eval_clients(dataloader))
-        print_rank(f'mode: {mode} evaluation_clients {len(val_clients)}', loglevel=logging.DEBUG)
-
-        usl_json = None  # NOTE: deprecated
-        val_loss = val_acc = total = 0
-        self.logits = {'predictions': [], 'probabilities': [], 'labels': []}
-        server_data = (0.0, usl_json, [p.data.to(torch.device('cpu')) for p in self.worker_trainer.model.parameters()])
-
-        for result in self.process_testvalidate(val_clients, server_data, mode):
-            output, (loss, cer, count) = result
-            val_loss += loss * count
-            val_acc += cer * count
-            total += count
-
-            if output is not None:
-                self.logits['predictions'].append(output['predictions'])
-                self.logits['probabilities'].append(output['probabilities'])
-                self.logits['labels'].append(output['labels'])
-
-        if  self.logits['probabilities'] and self.logits['predictions'] and self.logits['labels']:
-            self.logits['predictions'] = np.concatenate(self.logits['predictions'])
-            self.logits['probabilities'] = np.concatenate(self.logits['probabilities'])
-            self.logits['labels'] = np.concatenate(self.logits['labels'])
-
-        return val_loss / total, val_acc / total
-
-    def run_distributed_inference(self, mode):
-        '''Call `run_distributed_evaluation` specifically for test or validation.
-        
-        This is just a helper function that fetches the dataloader depending on
-        the mode and calls `run_distributed_evaluation` using that dataloader.
-
-        Args:
-            mode (str): `test` or `val`.
-        '''
-        if mode == 'val':
-            dataloader = self.val_dataloader
-        elif mode == 'test':
-            dataloader = self.test_dataloader
-        else:
-           raise NotImplementedError('Unsupported mode: {}'.format(mode))
-        return self.run_distributed_evaluation(dataloader, mode)
-
+    
     def run(self):
         '''Trigger training.
         
@@ -337,15 +253,17 @@ class OptimizationServer(federated.Server):
 
             # Do an initial validation round to understand the pretrained model's validation accuracy
             # Skip if we resumed from a checkpoint (cur_iter_no > 0)
+            eval_list = []
             if self.cur_iter_no == 0:
                 
                 if self.config['server_config']['initial_rec']:
                     eval_list.append('test')
                 if self.config['server_config']['initial_val']:
                     eval_list.append('val')
+                    run.log('LR for agg. opt.', get_lr(self.worker_trainer.optimizer))
 
                 print_rank("Running {} at itr={}".format(eval_list, self.cur_iter_no))
-                self.update_metrics(self.evaluation.run(eval_list, self.update_val_test_req(), metric_logger=run.log))
+                self.metrics = self.evaluation.run(eval_list, self.metrics, metric_logger=run.log)
                 eval_list=[] # some cleanup
 
             # Dump all the information in aggregate_metric
@@ -368,7 +286,6 @@ class OptimizationServer(federated.Server):
 
                 print_rank('==== iteration {}'.format(i))
                 log_metric('Current iteration', i)
-                usl_json = None  # deprecated
 
                 # Initial value for the learning rate of the worker
                 initial_lr = self.initial_lr_client * self.lr_weight
@@ -379,7 +296,6 @@ class OptimizationServer(federated.Server):
                 self.train_loss = []
                 server_data = (
                     initial_lr,
-                    usl_json,
                     [p.data.to(torch.device('cpu')) for p in self.worker_trainer.model.parameters()]
                 )
 
@@ -595,7 +511,24 @@ class OptimizationServer(federated.Server):
                 self.worker_trainer.run_ss_scheduler()
 
                 # Run inference and score on val/test depending on the iter. number
-                self.run_val_test(i + 1, metric_logger=log_metric)
+                if ((i+1) % self.val_freq) == 0:
+                    eval_list.append("val")
+                if ((i+1) % self.req_freq) == 0 :
+                    eval_list.append("test")
+
+                if len(eval_list)> 0:
+                    print_rank('Running {} at itr={}'.format(eval_list,i+1))
+                    self.metrics['worker_trainer'] = self.worker_trainer
+                    self.metrics = self.evaluation.run(eval_list, self.metrics, metric_logger=run.log)
+                    self.losses = self.evaluation.losses
+                    eval_list = []
+                
+                # Create a schedule for the initial_lr (for the worker)
+                if 'val' in eval_list:
+                    run.log('LR for agg. opt.', get_lr(self.worker_trainer.optimizer))
+                    if not (self.losses[0] < self.metrics['best_val_loss']): 
+                        self.lr_weight *= self.lr_decay_factor
+                        print_rank('LOG: Client weight of learning rate {}..'.format(self.lr_weight))
 
                 # Backup the current best models
                 self.backup_models(i)
@@ -608,10 +541,10 @@ class OptimizationServer(federated.Server):
                     self.log_path,
                     {
                         'i': i + 1,
-                        'best_val_loss': float(self.best_val_loss),
-                        'best_val_acc': float(self.best_val_acc),
-                        'best_test_loss': float(self.best_test_loss),
-                        'best_test_acc': float(self.best_test_acc),
+                        'best_val_loss': float(self.metrics['best_val_loss']), 
+                        'best_val_acc': float(self.metrics['best_val_acc']), 
+                        'best_test_loss': float(self.metrics['best_test_loss']), 
+                        'best_test_acc': float(self.metrics['best_test_acc']), 
                         'weight': float(self.lr_weight),
                         'num_label_updates': int(self.no_label_updates)
                     },
@@ -783,7 +716,8 @@ class OptimizationServer(federated.Server):
 
         # Get the validation result back
         if None in self.losses:
-            self.losses = self.run_distributed_inference(mode='val')
+            self.evaluation.run_distributed_inference(mode='val')
+            self.losses = self.evaluation.losses
 
         # Expected structure of batch
         print_rank('Performing RL training on the aggregation weights')
@@ -826,74 +760,6 @@ class OptimizationServer(federated.Server):
         print_rank('RL logging')
         metric_logger('RL Running Loss', self.RL.runningLoss)
         metric_logger('RL Rewards', reward)
-
-    def run_val_test(self, i, metric_logger=None):
-        '''Run validation or test, depending on current iteration i.
-        
-        Args:
-            i (int): current iteration.
-            metric_logger (callback, optional): callback used for logging.
-                Defaults to None, in which case AML logger is used.
-        '''
-
-        if metric_logger is None:
-            metric_logger = run.log
-
-        # Run validation and update the LR scheduler
-        if (i % self.val_freq) == 0:  # print loss info to Tensorboard on Philly
-            if 'wantRL' not in self.config['server_config'] or not self.config['server_config']['wantRL']:
-                print_rank('Running validation at itr={}'.format(i))
-                self.losses = self.run_distributed_inference(mode='val')
-
-            # Log changes
-            metric_logger('LR for agg. opt.', get_lr(self.worker_trainer.optimizer))
-            metric_logger('Val Loss', self.losses[0])
-            metric_logger('Val Acc', self.losses[1])
-
-            print_rank('LOG: val_loss={}: best_val_loss={}'.format(self.losses[0], self.best_val_loss))
-            print_rank('LOG: val_acc={}: best_val_acc={}'.format(self.losses[1], self.best_val_acc))
-
-            if self.losses[0] < self.best_val_loss:  # save the model when loss is improved
-                self.worker_trainer.save(
-                    model_path=self.model_path,
-                    token='best_val_loss',
-                    config=self.config['server_config']
-                )
-                self.best_val_loss = self.losses[0]
-            else:
-                # Create a schedule for the initial_lr (for the worker)
-                self.lr_weight *= self.lr_decay_factor
-                print_rank('LOG: Client weight of learning rate {}..'.format(self.lr_weight))
-
-            if self.losses[1] > self.best_val_acc:  # save the model when CER is improved
-                self.worker_trainer.save(
-                    model_path=self.model_path,
-                    token='best_val_acc',
-                    config=self.config['server_config']
-                )
-                self.best_val_acc = self.losses[1]
-
-        # Run full testing
-        if (i % self.rec_freq) == 0 and self.test_dataloader is not None:
-            print_rank('Running Testing at itr={}'.format(i))
-
-            aggregated_metrics = self.run_distributed_inference(mode='test')
-
-            metric_logger('Test Loss', aggregated_metrics[0])
-            metric_logger('Test Acc', aggregated_metrics[1])
-            print_rank('LOG: test_loss={}: best_test_loss={}'.format(aggregated_metrics[0], self.best_test_loss))
-            print_rank('LOG: test_acc={}: best_test_acc={}'.format(aggregated_metrics[1], self.best_test_acc))
-
-            if aggregated_metrics[0] < self.best_test_loss:
-                self.best_test_loss=aggregated_metrics[0]
-
-            if aggregated_metrics[1] > self.best_test_acc:
-                self.best_test_acc = aggregated_metrics[1]
-                self.worker_trainer.save(
-                    model_path=self.model_path,
-                    token='best_test_acc',
-                    config=self.config['server_config'],
-                )
 
     def aggregate_gradients_inplace(self, client_parameters):
         '''Aggregate list of tensors into model gradients.

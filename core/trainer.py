@@ -5,10 +5,12 @@ import logging
 import os
 import re
 
+from importlib.machinery import SourceFileLoader
 import numpy as np
 import torch
 import torch.nn as nn
 
+from core.metrics import Metrics
 from utils import \
     get_lr, \
     get_lr_all, \
@@ -431,9 +433,6 @@ def run_validation_generic(model, val_dataloader):
     """
 
     print_rank("run_validation_generic", loglevel=logging.DEBUG)
-
-    val_losses, val_accuracies = list(), list()
-    counter = 0
     model.set_eval()
     print_rank("set_eval", loglevel=logging.DEBUG)
 
@@ -452,37 +451,18 @@ def run_validation_generic(model, val_dataloader):
         f"len_sampler: {len(val_loader._index_sampler)}",
         loglevel=logging.DEBUG
     )
-
-    # Perform inference and compute metrics
-    output_tot = {"probabilities": [], "predictions": [], "labels":[]}
-    with torch.no_grad():
-        for _, batch in enumerate(val_loader):
-            val_loss = model.loss(batch).item()
-            output, val_acc, batch_size = model.inference(batch)
-
-            if isinstance(output, dict):
-                output_tot["probabilities"].append(output["probabilities"])
-                output_tot["predictions"].append(output["predictions"])
-                output_tot["labels"].append(output["labels"])
-
-            val_losses.append(val_loss * batch_size)
-            val_accuracies.append(val_acc * batch_size)
-            counter += batch_size
-
-    output_tot["probabilities"] = np.concatenate(output_tot["probabilities"]) if output_tot["probabilities"] else []
-    output_tot["predictions"] = np.concatenate(output_tot["predictions"]) if output_tot["predictions"] else []
-    output_tot["labels"] = np.concatenate(output_tot["labels"]) if output_tot["labels"] else []
-
-    # Post-processing of metrics
-    print_rank(f"validation complete {counter}", loglevel=logging.DEBUG)
-
-    model.set_train()
-    avg_val_loss = sum(val_losses) / counter
-    avg_val_acc = sum(val_accuracies) / counter
-    print_rank(f"validation examples {counter}", loglevel=logging.DEBUG)
-
-    return output_tot, avg_val_loss, avg_val_acc
-
+    
+    try:
+        from core.globals import task
+        loader = SourceFileLoader("CustomMetrics", str("./experiments/"+task+"/custom_metrics.py")).load_module()
+        metrics_cl = getattr(loader,"CustomMetrics")()
+        print_rank("Loading customized metrics")
+    except:
+        metrics_cl = Metrics()
+        print_rank("Loading default metrics")
+        
+    return metrics_cl.compute_metrics(dataloader=val_loader, model=model)
+       
 def set_component_wise_lr(model, optimizer_config, updatable_names):
     """Set zero learning rate for layers in order to freeze the update.
 

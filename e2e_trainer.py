@@ -92,7 +92,7 @@ def run_worker(model_path, config, task, data_path, local_rank):
     """
     model_config = config["model_config"]
     server_config = config["server_config"]
-    define_file_type(data_path, config)
+    define_file_type(data_path, config, task)
 
     # Get the rank on MPI
     rank = local_rank if local_rank > -1 else federated.rank()

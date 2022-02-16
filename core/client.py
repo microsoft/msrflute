@@ -236,14 +236,15 @@ class Client:
             p.data = data.detach().clone().cuda() if torch.cuda.is_available() else data.detach().clone()
         print_rank(f'Model setup complete. {time.time() - begin}s elapsed.', loglevel=logging.DEBUG)
 
-        # Compute output and metrics on the test or validation data
+     
         num_instances = sum(data_strct['num_samples'])
         print_rank(f'Validating {num_instances}', loglevel=logging.DEBUG)
-        output, loss, cer = run_validation_generic(model, dataloader)
-        if not want_logits:
-            output = None
 
-        return output, (loss, cer, num_instances)
+        # Compute output and metrics on the test or validation data
+        output, metrics = run_validation_generic(model, dataloader)
+        output = None if not want_logits else output
+
+        return output, metrics, num_instances
 
     @staticmethod
     def process_round(client_data, server_data, model, data_path, eps=1e-7):
