@@ -67,6 +67,16 @@ def check_server_config(config, default_server_conf):
             config['server_config']['data_config']['val']['process_line_by_line'] =config['model_config']['BERT']['model']['process_line_by_line']
             config['server_config']['data_config']['test']['process_line_by_line']=config['model_config']['BERT']['model']['process_line_by_line']
 
+    if "initial_val" in config['server_config']:
+        config['server_config']['initial_val'] = config['server_config']['initial_val']
+    else:
+        config['server_config']['initial_val'] = False
+
+    if "initial_rec" in config['server_config']:
+        config['server_config']['initial_rec'] = config['server_config']['initial_rec']
+    else:
+        config['server_config']['initial_rec'] = False
+        
     return config
 
 

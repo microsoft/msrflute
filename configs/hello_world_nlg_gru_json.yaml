@@ -52,7 +52,7 @@ server_config:
     val_freq: 2                     # Frequency for validation rounds
     rec_freq: 4                     # Frequency for testing rounds
     initial_val : true              # Enable initial validation round at itr=0
-    initial_freq: false             # Enable initial testing round at itr=0
+    initial_rec: false             # Enable initial testing round at itr=0
     max_iteration: 11               # Total number of rounds for FL
     num_clients_per_iteration: 10   # Number of clients sampled per round
     data_config:                    # Server-side data configuration

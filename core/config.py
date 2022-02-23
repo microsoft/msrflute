@@ -332,7 +332,7 @@ class ServerConfig(Config):
     val_freq: int | None = None
     rec_freq: int | None = None
     initial_val: bool = False
-    initial_req: bool = False
+    initial_rec: bool = False
     wantRL: bool = False
     data_config: DataConfig = None
     type: str = None

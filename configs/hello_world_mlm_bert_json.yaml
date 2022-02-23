@@ -67,7 +67,7 @@ server_config:
     val_freq: 4
     rec_freq: 16
     initial_val : true
-    initial_freq: false
+    initial_rec: false
     max_iteration: 10000
     num_clients_per_iteration: 200
     data_config:
