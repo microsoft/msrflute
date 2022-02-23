@@ -338,7 +338,15 @@ class OptimizationServer(federated.Server):
             # Do an initial validation round to understand the pretrained model's validation accuracy
             # Skip if we resumed from a checkpoint (cur_iter_no > 0)
             if self.cur_iter_no == 0:
-                self.run_val_test(0, metric_logger=run.log)
+                
+                if self.config['server_config']['initial_rec']:
+                    eval_list.append('test')
+                if self.config['server_config']['initial_val']:
+                    eval_list.append('val')
+
+                print_rank("Running {} at itr={}".format(eval_list, self.cur_iter_no))
+                self.update_metrics(self.evaluation.run(eval_list, self.update_val_test_req(), metric_logger=run.log))
+                eval_list=[] # some cleanup
 
             # Dump all the information in aggregate_metric
             print_rank('Saving Model Before Starting Training', loglevel=logging.INFO)
