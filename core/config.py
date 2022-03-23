@@ -32,6 +32,7 @@ def from_dict(cls, config):
 
 
 class Config(MutableMapping):
+    """Base class for configuration classes."""
     def get(self, k: str, default=None):
         result = getattr(self, k, default)
         if result is None:
@@ -75,7 +76,33 @@ class Config(MutableMapping):
 
 @dataclass
 class ModelConfig(Config):
+    """Model configuration
 
+The model configuration specifies model architecture, parameters, and initialization settings.
+
+Attributes:
+    model_type (str): The class name of the model to instantiate. eg GRU.
+
+    model_folder (str): The relative path to the model.py file where model_type is defined. eg experiments/nlg_gru/model.py
+
+    pretrained_model_path (str): The path to the pretrained model.  If None, the model will be randomly initialized using the method defined in weight_init.
+
+    embed_dim (int): specific to GRU models, embedding dimension.
+
+    vocab_size (int): specific to GRU models, the vocabulary size.
+
+    hidden_dim (int): specific to GRU models, the hidden size.
+
+    weight_init (str): ``default``, or ``xavier_normal``, indicating how to randomly initialize the model weights.
+
+    OOV_correct (bool): whether OOV predictions are evaluated as correct, or ignored.
+
+    BERT (BERTConfig): BERT-specific configuration.
+
+ToDo:
+    * remove or sub-class GRU-specific parameters
+    * move OOV_correct to the data configs?
+"""
     model_type: str = None
     model_folder: str = None
     pretrained_model_path: str = None
@@ -99,6 +126,33 @@ class ModelConfig(Config):
 
 @dataclass
 class BERTModelConfig(Config):
+    """BERT model configuration
+
+The BERT configuration specifies huggingface-specific BERT model settings.
+
+Attributes:
+    model_name (str): The name of the BERT model.  eg bert-base-uncased.
+    
+    cache_dir (str): Tokenizer cache directory, will be created if it doesn't exist.
+
+    use_fast_tokenizer (bool): Whether to use the fast tokenizer.
+
+    mask_token (str): special token to use for masking.
+
+    task (str): The task to use for BERT.  eg mlm.
+
+    past_index (int): The index of the past state in the BERT model's state dict.
+
+    prediction_loss_only (bool): if False, also produce metrics for predictions and labels.
+
+    process_line_by_line (bool): if True, process the input line-by-line.
+
+ToDo:
+    * check how cache_dir is used- there's a risk of multiple processes reading/writing at the same time.
+    * verify the meaning of past_index (thanks copilot)
+    * document the difference when process_line_by_line is True vs False
+
+    """
     model_name: str = None
     cache_dir: str = None
     use_fast_tokenizer: bool = False
@@ -115,6 +169,19 @@ class BERTModelConfig(Config):
 
 @dataclass
 class BERTTrainingConfig(Config):
+    """BERT training configuration
+
+Configuration settings for BERT training.
+
+Attributes:
+    seed (int): random seed for reproducibility.
+
+    label_smoothing_factor (float): label smoothing factor.  Applied label smoothing when the factor is non-zero.
+
+    batch_size (int): batch size.
+
+    max_seq_length (int): maximum input sequence length.
+    """
     seed: int | None = None
     label_smoothing_factor: float | None = None
     batch_size: int | None = None
@@ -127,6 +194,16 @@ class BERTTrainingConfig(Config):
 
 @dataclass
 class BERTConfig(Config):
+    """BERT configuration
+    Specifies the model and training configuration for huggingface modeling scenarios.
+    
+    Attributes:
+    loader_type (str): loader type hint. eg 'text'
+    
+    model (BERTModelConfig): BERT model configuration.
+
+    training (BERTTrainingConfig): BERT training configuration.
+    """
     loader_type: str = None
     model: BERTModelConfig = None
     training: BERTTrainingConfig = None
@@ -146,6 +223,56 @@ class BERTConfig(Config):
 
 @dataclass
 class PrivacyConfig(Config):
+    """Privacy configuration
+    
+    The privacy configuration specified differential privacy settings for the model.
+    The user can choose between local or global DP.  When local DP is enabled, a global 
+    epsilon can be computed by applying the RDP accountant (see extensions/privacy). 
+    The `eps` parameter is used to specify the privacy budget for local DP.  Conversely, when 
+    global DP is enabled, `eps` is ignored and `global_sigma` directly specifies the global 
+    Gaussian noise.   `max_grad` specifies the clipping parameter for local or global DP, 
+    `max_weight` specifies the clipping parameter for the local gradient aggregation weight 
+    (applies to softmax aggregation), and `weight_scaler` indicates how the aggregation weight 
+    is scaled before noise addition, and unscaled afterward. This enables a single eps/sigma 
+    parameter for both the gradient and its weight.
+
+    Example:  
+       This example applies local DP with eps=1000. The global epsilon will be computing using Renyi DP accounting.
+       
+       .. code-block:: yaml
+       
+            dp_config:
+                # Local dp clips and adds noise on the client and centrally accumulates the privacy budget.
+                enable_local_dp: true
+                eps: 100 # epsilon
+                max_grad: 0.008  # max gradient
+                # The max_weight and min_weight should be already scaled by weight_scaler
+                # Because we scale down the weight using weight_scalar -> clip -> add noise -> scale back up.
+                max_weight: 0.0001
+                weight_scaler: 0.0001
+                min_weight: 0.00009
+
+
+    Attributes:
+        enable_local_dp (bool): whether to enable local DP.
+
+        enable_global_dp (bool): whether to enable global DP.
+
+        eps (float): the privacy budget for local DP.
+
+        delta (float): the privacy delta parameter for local DP.
+
+        global_sigma (float): the global Gaussian noise for global DP.
+
+        max_grad (float): the gradient clipping parameter.
+
+        max_weight (float): the aggregation weight clipping parameter.
+
+        weight_scaler (float): the aggregation weight scaling parameter.
+
+        min_weight (float): the minimum per-gradient aggregation weight.
+
+    """
     enable_local_dp: bool = False
     enable_global_dp: bool = False
     eps: float | None = None
@@ -163,6 +290,29 @@ class PrivacyConfig(Config):
 
 @dataclass
 class PrivacyMetricsConfig(Config):
+    """Privacy metrics configuration
+    
+    This optional feature computes local privacy metrics for computed gradients,
+    and optionally filters gradients based on estimated privacy loss.
+
+    Attributes:
+
+        apply_metrics (bool): whether to compute privacy metrics.
+
+        apply_indices_extraction (bool): whether to attempt local data reconstruction.
+
+        allowed_word_rank (int): threshold for successful reconstruction. 
+
+        apply_leakage_metric (bool): whether to compute a privacy leakage metric based on the ratio of perplexities before and after local training.
+
+        max_leakage (float): the maximum allowed privacy leakage before filtering
+
+        adaptive_leakage_threshold (float): if non-zero, compute an adaptive leakage threshold based on the previous round of training.  For example at 0.95, the max_leakage will be adjusted to reject 5% of gradients, based on the previous round of training.
+
+        is_leakage_weighted (bool): scales the leakage by the maximum likelihood of the pre- and post- likelihood tensors. ie the worst-case leakage is weighted by the worst-case likelihood that we might encounter it.
+
+        attacker_optimizer_config (OptimizerConfig): the optimizer configuration for the reconstruction attack.
+    """
     apply_metrics: bool = False
     apply_indices_extraction: bool = False
     allowed_word_rank: int | None = None
@@ -187,6 +337,12 @@ class PrivacyMetricsConfig(Config):
 
 @dataclass
 class OptimizerConfig(Config):
+    """Optimizer configuration
+    
+    Pass any pytorch-supported optimizer configuration. The object should include 
+    a `type` field which indicates the pytorch optimizer type that should be invoked. 
+    This will be stripped from the object before being passed to the Optimizer's init.
+    """
     type: str = None
     # Leave this open for any keyword arguments, so we don't break torch constructors
     # In the future we can limit keywords to torch-specific ones.
@@ -203,9 +359,21 @@ class OptimizerConfig(Config):
             setattr(result, k, config[k])
         return result
 
-
 @dataclass
 class AnnealingConfig(Config):
+    """Learning rate annealing configuration
+    
+
+    Attributes:
+    
+    type (str): the type of annealing. Supported methods: :code:`step_lr`, :code:`multi_step_lr`, :code:`rampup-keep-expdecay-keep`, :code:`val_loss`.
+
+    step_interval (str): the interval at which to step the learning rate. Supported intevals: :code:`epoch`, :code:`batch`.
+
+    gamma (float): the learning rate decay factor.
+
+    step_size (int): the interval between annealing operations.
+    """
     type: str = None
     step_interval: str = None
     gamma: float | None = None
@@ -339,6 +507,7 @@ class ServerConfig(Config):
     aggregate_median: str = None
     weight_train_loss: str = None
     softmax_beta: float | None = None
+    max_weight: float | None = None
     initial_lr_client: float | None = None
     lr_delay_factor: float | None = None
     best_model_criterion: str = None
