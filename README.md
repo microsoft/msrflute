@@ -44,7 +44,7 @@ $ cd doc/sphinx
 $ make html
 ```
 
-On Windows, you can use the `make.bat` script.
+On Windows, you can use the `make.bat` script.  It may be necessary to `export PYTHONPATH=../../` for sphinx to find the code.
 
 ## Architecture
 
