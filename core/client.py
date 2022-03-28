@@ -390,11 +390,14 @@ class Client:
         print_rank('client={}: training loss={}'.format(client_id, train_loss), loglevel=logging.DEBUG)
 
         # Estimate gradient magnitude mean/var
-        trainer.sufficient_stats['mean'] = trainer.sufficient_stats['sum'] / trainer.sufficient_stats['n']
-        trainer.sufficient_stats['mag'] = np.sqrt(trainer.sufficient_stats['sq_sum'] / trainer.sufficient_stats['n'])
-        trainer.sufficient_stats['var'] = trainer.sufficient_stats['sq_sum'] / trainer.sufficient_stats['n'] - \
-            trainer.sufficient_stats['mag'] ** 2
-        trainer.sufficient_stats['norm'] = np.sqrt(trainer.sufficient_stats['sq_sum'])
+        # Now computed when the sufficient stats are updated.
+        assert 'sum' in trainer.sufficient_stats
+        assert 'mean' in trainer.sufficient_stats
+        # trainer.sufficient_stats['mean'] = trainer.sufficient_stats['sum'] / trainer.sufficient_stats['n']
+        # trainer.sufficient_stats['mag'] = np.sqrt(trainer.sufficient_stats['sq_sum'] / trainer.sufficient_stats['n'])
+        # trainer.sufficient_stats['var'] = trainer.sufficient_stats['sq_sum'] / trainer.sufficient_stats['n'] - \
+        #    trainer.sufficient_stats['mag'] ** 2
+        # trainer.sufficient_stats['norm'] = np.sqrt(trainer.sufficient_stats['sq_sum'])
 
         trainer.train_loss = train_loss
         trainer.num_samples = num_samples

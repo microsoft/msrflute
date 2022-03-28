@@ -35,10 +35,6 @@ from utils.dataloaders_utils import (
     make_val_dataloader,
     make_test_dataloader,
 )
-from config_file_parser import (
-    check_server_config,
-    check_client_config
-)
 
 assert TRAINING_FRAMEWORK_TYPE == "mpi", "Unsupported platform {}".format(TRAINING_FRAMEWORK_TYPE)
 
@@ -189,40 +185,7 @@ if __name__ == "__main__":
     task = args.task
     local_rank = args.local_rank
 
-    # Create dictionaries w/ parameters
-    default_data_conf = {
-        "input_dim": 300,
-        "batch_size": 40,
-        "loader_type": "text",
-        "prepend_datapath": False,
-        "pin_memory": True,
-        "num_frames": 0,
-        "desired_max_samples": 300,
-        "max_grad_norm": 5.0,        # max_grad_norm for gradient clipping
-        "num_workers": 1,
-        "max_batch_size": 0,         # maximum number of batch size; if 0, no limitation is applied
-        "unsorted_batch": False      # do not sort when making batch; this is inefficient in terms of batch, but could be efficient in terms of accuracy
-    }
-
-    default_server_conf = {
-        "val_freq": 1,
-        "rec_freq": 8,
-        "max_iteration": 100000000,
-        "type": "optimization",
-        "data_config": default_data_conf,
-        "aggregate_median": None,
-        "best_model_criterion": "loss",
-        "fall_back_to_best_model": False,
-        "num_clients_per_iteration": -1
-    }
-
-    default_client_conf = {
-        "copying_train_jsonls": True,
-        "type": "gradient_computation",
-        "data_config": default_data_conf,
-    }
-
-   # The mount point can also be retrieved from input_datasets of the run context
+    # The mount point can also be retrieved from input_datasets of the run context
     if data_path is None:
         data_path = Run.get_context().input_datasets["input"]
     print("The data can be found here: ", data_path)
@@ -241,41 +204,20 @@ if __name__ == "__main__":
     cfg_out = os.path.join(experiment_root, "FLUTE_config.yaml")
     if local_rank <= 0:
         shutil.copyfile(args.config, cfg_out)
-    print("Copy created")
-
+    
     # Initialize logging
     init_logging(log_path, loglevel=logging_level)
 
     with open(args.config) as f:
         cfg_dict = yaml.safe_load(f)
         config = FLUTEConfig.from_dict(cfg_dict)
-
-        assert "num_clients" not in config["server_config"]["data_config"], "Remove \"num_clients\" from server data_config since this is a reserved key"
-        assert "num_clients" not in config["client_config"]["data_config"], "Remove \"num_clients\" from client data_config since this is a reserved key"
-
-        # Make sure the pretrained model is found in the correct place
-        if "pretrained_model_path" in config["model_config"]["model_type"]:
-            config["model_config"]["model_type"]["pretrained_model_path"] = os.path.join(data_path, config["model_config"]["model_type"]["pretrained_model_path"])
-        if "pretrained_model_path" in config["model_config"]:
-            config["model_config"]["pretrained_model_path"] = os.path.join(data_path, config["model_config"]["pretrained_model_path"])
-
+        
         config["data_path"] = data_path
-
-        config = check_server_config(config, default_server_conf)
-        config = check_client_config(config, default_client_conf)
-
-        # Add task specification to client configuration
+        config["output_path"] = args.outputPath
+        config["experiment_name"] = experiment_name
         config["client_config"]["task"] = task
         config["server_config"]["task"] = task
-
-        # RL-related options
-        if config["server_config"].get("wantRL", False):
-            if config["server_config"]["RL"].get("RL_path_global", True):
-                config["server_config"]["RL"]["RL_path"] = os.path.join(args.outputPath,
-                                                                        config["server_config"]["RL"]["RL_path"])
-            else:
-                config["server_config"]["RL"]["RL_path"] = os.path.join(args.outputPath, experiment_name,
-                                                                        config["server_config"]["RL"]["RL_path"])
+        config.validate()
 
         # Instantiate either Server or Worker on the thread
         run_worker(model_path, config, task, data_path, local_rank)

@@ -24,7 +24,7 @@ from utils import \
 
 class TrainerBase:
     """Abstract class defining Trainer objects' common interface.
-    
+
     Args:
         model (torch.nn.Module): model to be trained.
         train_dataloader (torch.utils.data.DataLoader): dataloader that
@@ -195,7 +195,7 @@ class ModelUpdater(TrainerBase):
 class Trainer(TrainerBase):
     """Perform training step for any given client.
 
-    The main method to be called for triggering a training step is 
+    The main method to be called for triggering a training step is
     :code:`train_desired_samples`, which on its turn relies on
     :code:`run_train_epoch`.
 
@@ -293,7 +293,21 @@ class Trainer(TrainerBase):
         """Compute statistics about the gradients."""
 
         sum_mean_grad, sum_mean_grad2, n = self.accumulate_gradient_power()
-        self.sufficient_stats = {"n": n, "sum": sum_mean_grad, "sq_sum": sum_mean_grad2}
+
+        mean_grad = sum_mean_grad / n
+        mag_grad = np.sqrt(sum_mean_grad2 / n)
+        var_grad = sum_mean_grad2 / n - mag_grad**2
+        norm_grad = np.sqrt(sum_mean_grad2)
+
+        self.sufficient_stats = {
+            "n": n,
+            "sum": sum_mean_grad,
+            "sq_sum": sum_mean_grad2,
+            "var": var_grad,
+            "mean": mean_grad,
+            "mag": mag_grad,
+            "norm": norm_grad
+        }
 
     def train_desired_samples(self, desired_max_samples=None, apply_privacy_metrics=False):
         """Triggers training step.
@@ -451,7 +465,7 @@ def run_validation_generic(model, val_dataloader):
         f"len_sampler: {len(val_loader._index_sampler)}",
         loglevel=logging.DEBUG
     )
-    
+
     try:
         from core.globals import task
         loader = SourceFileLoader("CustomMetrics", str("./experiments/"+task+"/custom_metrics.py")).load_module()
@@ -460,9 +474,9 @@ def run_validation_generic(model, val_dataloader):
     except:
         metrics_cl = Metrics()
         print_rank("Loading default metrics")
-        
+
     return metrics_cl.compute_metrics(dataloader=val_loader, model=model)
-       
+
 def set_component_wise_lr(model, optimizer_config, updatable_names):
     """Set zero learning rate for layers in order to freeze the update.
 
@@ -495,9 +509,9 @@ def save_model(model_path, config, model, optimizer, lr_scheduler, ss_scheduler,
     """Save a model as well as training information."""
 
     save_state = {
-        "model_state_dict" : model.state_dict(),
-        "optimizer_state_dict" : optimizer.state_dict() if optimizer is not None else None,
-        "lr_scheduler_state_dict" : lr_scheduler.state_dict() if lr_scheduler is not None else None
+        "model_state_dict": model.state_dict(),
+        "optimizer_state_dict": optimizer.state_dict() if optimizer is not None else None,
+        "lr_scheduler_state_dict": lr_scheduler.state_dict() if lr_scheduler is not None else None
     }
     if ss_scheduler is not None:
         save_state["ss_scheduler_state_dict"] = ss_scheduler.state_dict()

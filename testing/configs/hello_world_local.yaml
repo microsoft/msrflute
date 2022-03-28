@@ -143,7 +143,7 @@ server_config:
             unsorted_batch: true    
     type: model_optimization  
     aggregate_median: softmax  # the FL aggregation method
-    weight_train_loss: grad_mean_loss #train_loss #grad_mean_loss #or train_loss - how each client's weight is determined.
+    weight_train_loss: mag_mean_loss #or train_loss or mag_var_loss - how each client's weight is determined.
     softmax_beta: 1000
     initial_lr_client: 0.1
     lr_decay_factor: 1.0

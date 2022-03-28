@@ -92,7 +92,14 @@ class OptimizationServer(federated.Server):
         self.req_freq = server_config['rec_freq']
 
         self.evaluation = Evaluation(config, model_path, self.process_testvalidate, val_dataloader, test_dataloader)
-        self.metrics = dict()
+
+        # TODO: does this need to be adjusted for custom metrics?
+        self.metrics = {
+            'best_val_loss': float('inf'),
+            'best_val_acc': 0.0,
+            'best_test_loss': float('inf'),
+            'best_test_acc': 0.0
+        }
 
         self.model_backup_freq = server_config.get('model_backup_freq', 100)
         self.worker_trainer_config = server_config.get('trainer_config', {})
@@ -198,17 +205,17 @@ class OptimizationServer(federated.Server):
             with open(self.log_path, 'r') as logfp:  # loading the iteration no., best loss and CER
                 elems = json.load(logfp)
                 self.cur_iter_no = elems.get('i', 0)
-                self.metrics['best_val_loss'] = elems.get('best_val_loss', float('inf')) 
-                self.metrics['best_val_acc'] = elems.get('best_val_acc', float('inf'))
+                self.metrics['best_val_loss'] = elems.get('best_val_loss', float('inf'))
+                self.metrics['best_val_acc'] = elems.get('best_val_acc', 0)
                 self.metrics['best_test_loss'] = elems.get('best_test_loss', float('inf'))
-                self.metrics['best_test_acc'] = elems.get('best_test_acc', float('inf'))
+                self.metrics['best_test_acc'] = elems.get('best_test_acc', 0)
                 self.lr_weight = elems.get('weight', 1.0)
                 self.no_label_updates = elems.get('num_label_updates', 0)
                 print_rank(f'Resuming from status_log: cur_iter: {self.cur_iter_no}')
-    
+
     def run(self):
         '''Trigger training.
-        
+
         This is a simple wrapper to the `train` method.
         '''
         print_rank('server started')
@@ -237,7 +244,7 @@ class OptimizationServer(federated.Server):
             # Skip if we resumed from a checkpoint (cur_iter_no > 0)
             eval_list = []
             if self.cur_iter_no == 0:
-                
+
                 if self.config['server_config']['initial_rec']:
                     eval_list.append('test')
                 if self.config['server_config']['initial_val']:
@@ -246,7 +253,7 @@ class OptimizationServer(federated.Server):
 
                 print_rank("Running {} at itr={}".format(eval_list, self.cur_iter_no))
                 self.metrics = self.evaluation.run(eval_list, self.metrics, metric_logger=run.log)
-                eval_list=[] # some cleanup
+                eval_list = [] # some cleanup
 
             # Dump all the information in aggregate_metric
             print_rank('Saving Model Before Starting Training', loglevel=logging.INFO)
@@ -257,7 +264,7 @@ class OptimizationServer(federated.Server):
                     config=self.config['server_config']
                 )
 
-            # Training loop 
+            # Training loop
             self.worker_trainer.model.train()
             for i in range(self.cur_iter_no, self.max_iteration):
                 begin = time.time()
@@ -330,7 +337,7 @@ class OptimizationServer(federated.Server):
                 adaptive_leakage = apply_privacy_metrics and \
                     self.config['privacy_metrics_config'].get('adaptive_leakage_threshold', None)
                 if apply_privacy_metrics:
-                    privacy_metrics_stats = defaultdict(list)                    
+                    privacy_metrics_stats = defaultdict(list)
 
                 # Initialize profiler
                 profiler = None
@@ -343,20 +350,20 @@ class OptimizationServer(federated.Server):
 
                 for client_output in self.process_clients(sampled_clients, server_data, self.clients_in_parallel):
                     # Process client output
-                    client_timestamp = client_output['ts'] 
+                    client_timestamp = client_output['ts']
                     client_stats = client_output['cs']
                     client_loss = client_output['tl']
-                    client_mag_grad = client_output['mg'] 
+                    client_mag_grad = client_output['mg']
                     client_mean_grad = client_output['ng']
                     client_var_grad = client_output['vg']
                     client_norm_grad = client_output['rg']
                     client_payload = client_output['pl']
-                                        
+
                     if apply_privacy_metrics:
                         privacy_stats = client_output['ps']
                         for metric, value in privacy_stats.items():
                             privacy_metrics_stats[metric].append(value)
-                    
+
                     self.run_stats['mpiCosts'][-1].append(time.time() - client_timestamp)
 
                     # Get actual pseudo-gradients for aggregation
@@ -395,7 +402,7 @@ class OptimizationServer(federated.Server):
                 client_norm_grads = np.array(client_norm_grads)
 
                 client_stats = (client_mag_grads, client_mean_grads, client_var_grads)
-                
+
                 dump_norm_stats = self.config.get('dump_norm_stats', False)
                 if dump_norm_stats:
                     with open(os.path.join(self.model_path, 'norm_stats.txt'), 'a', encoding='utf-8') as outF:
@@ -463,11 +470,11 @@ class OptimizationServer(federated.Server):
                     self.metrics = self.evaluation.run(eval_list, self.metrics, metric_logger=run.log)
                     self.losses = self.evaluation.losses
                     eval_list = []
-                
+
                 # Create a schedule for the initial_lr (for the worker)
                 if 'val' in eval_list:
                     run.log('LR for agg. opt.', get_lr(self.worker_trainer.optimizer))
-                    if not (self.losses[0] < self.metrics['best_val_loss']): 
+                    if not (self.losses[0] < self.metrics['best_val_loss']):
                         self.lr_weight *= self.lr_decay_factor
                         print_rank('LOG: Client weight of learning rate {}..'.format(self.lr_weight))
 
@@ -482,10 +489,10 @@ class OptimizationServer(federated.Server):
                     self.log_path,
                     {
                         'i': i + 1,
-                        'best_val_loss': float(self.metrics['best_val_loss']), 
-                        'best_val_acc': float(self.metrics['best_val_acc']), 
-                        'best_test_loss': float(self.metrics['best_test_loss']), 
-                        'best_test_acc': float(self.metrics['best_test_acc']), 
+                        'best_val_loss': float(self.metrics['best_val_loss']),
+                        'best_val_acc': float(self.metrics['best_val_acc']),
+                        'best_test_loss': float(self.metrics['best_test_loss']),
+                        'best_test_acc': float(self.metrics['best_test_acc']),
                         'weight': float(self.lr_weight),
                         'num_label_updates': int(self.no_label_updates)
                     },
@@ -531,7 +538,7 @@ class OptimizationServer(federated.Server):
 
     def backup_models(self, i):
         '''Save the current best models.
-        
+
         Save CER model, the best loss model and the best WER model. This occurs
         at a specified period.
 
@@ -586,7 +593,7 @@ def select_server(server_type, config):
     Right now this just returns `OptimizationServer`, but this
     function could be useful when there are multiple choices of
     server.
-    
+
     Args:
         server_type (str): indicates server choice.
         config (dict): config parsed from YAML, passed so that
