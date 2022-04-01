@@ -14,7 +14,6 @@ import time
 from easydict import EasyDict as edict
 
 import h5py
-import math
 import numpy as np
 import torch
 
@@ -25,6 +24,7 @@ if TRAINING_FRAMEWORK_TYPE == 'mpi':
 else:
     raise NotImplementedError('{} is not supported'.format(TRAINING_FRAMEWORK_TYPE))
 
+from .strategies import select_strategy
 from .trainer import (
     Trainer,
     run_validation_generic,
@@ -44,7 +44,6 @@ from utils.dataloaders_utils import (
 
 import extensions.privacy
 from extensions.privacy import metrics as privacy_metrics
-from extensions import quant_model
 from experiments import make_model
 
 
@@ -236,14 +235,15 @@ class Client:
             p.data = data.detach().clone().cuda() if torch.cuda.is_available() else data.detach().clone()
         print_rank(f'Model setup complete. {time.time() - begin}s elapsed.', loglevel=logging.DEBUG)
 
-        # Compute output and metrics on the test or validation data
+     
         num_instances = sum(data_strct['num_samples'])
         print_rank(f'Validating {num_instances}', loglevel=logging.DEBUG)
-        output, loss, cer = run_validation_generic(model, dataloader)
-        if not want_logits:
-            output = None
 
-        return output, (loss, cer, num_instances)
+        # Compute output and metrics on the test or validation data
+        output, metrics = run_validation_generic(model, dataloader)
+        output = None if not want_logits else output
+
+        return output, metrics, num_instances
 
     @staticmethod
     def process_round(client_data, server_data, model, data_path, eps=1e-7):
@@ -276,13 +276,14 @@ class Client:
 
         model_config = config['model_config']
         client_config = config['client_config']
-        dp_config = config.get('dp_config', None)
         data_config = client_config['data_config']['train']
         task = client_config.get('task', {})
-        quant_threshold = client_config.get('quant_thresh', None)
-        quant_bits = client_config.get('quant_bits', 10)
         trainer_config = client_config.get('trainer_config', {})
         privacy_metrics_config = config.get('privacy_metrics_config', None)
+
+        StrategyClass = select_strategy(config['strategy'])
+        strategy = StrategyClass('client', config)
+        print_rank(f'Client successfully instantiated strategy {strategy}', loglevel=logging.DEBUG)
 
         begin = time.time()  
         client_stats = {}      
@@ -308,19 +309,18 @@ class Client:
         print_rank('Loading : {}-th client with name: {}, {} samples, {}s elapsed'.format(
             client_id, user, data_strct['num_samples'][0], time.time() - begin), loglevel=logging.INFO)
 
-        # Estimate stats on the smooth gradient
-        stats_on_smooth_grad = client_config.get('stats_on_smooth_grad', False)
-
         # Get dataloaders
         train_dataloader = make_train_dataloader(data_config, data_path, task=task, clientx=0, data_strct=input_strct)
         val_dataloader   = make_val_dataloader(data_config, data_path)
 
         # Instantiate the model object
         if model is None:
-            model = make_model(model_config,
-                            dataloader_type=train_dataloader.__class__.__name__,
-                            input_dim=data_config['input_dim'],
-                            vocab_size=train_dataloader.vocab_size)   
+            model = make_model(
+                model_config,
+                dataloader_type=train_dataloader.__class__.__name__,
+                input_dim=data_config['input_dim'],
+                vocab_size=train_dataloader.vocab_size,
+            )
 
         # Set model parameters
         n_layers, n_params = len([f for f in model.parameters()]), len(model_parameters)
@@ -374,7 +374,7 @@ class Client:
 
         # Mark the end of setup
         end = time.time()
-        client_stats['setup'] = end-begin
+        client_stats['setup'] = end - begin
         print_rank(f'Client setup cost {client_stats["setup"]}s', loglevel=logging.DEBUG)               
         begin_training = end
         
@@ -389,134 +389,43 @@ class Client:
         train_loss, num_samples = trainer.train_desired_samples(desired_max_samples=desired_max_samples, apply_privacy_metrics=apply_privacy_metrics)
         print_rank('client={}: training loss={}'.format(client_id, train_loss), loglevel=logging.DEBUG)
 
-        # From now on we just post-process the results of the training:
-        # get weights for aggregation, do quantization/DP, compute statistics...
+        # Estimate gradient magnitude mean/var
+        # Now computed when the sufficient stats are updated.
+        assert 'sum' in trainer.sufficient_stats
+        assert 'mean' in trainer.sufficient_stats
+        # trainer.sufficient_stats['mean'] = trainer.sufficient_stats['sum'] / trainer.sufficient_stats['n']
+        # trainer.sufficient_stats['mag'] = np.sqrt(trainer.sufficient_stats['sq_sum'] / trainer.sufficient_stats['n'])
+        # trainer.sufficient_stats['var'] = trainer.sufficient_stats['sq_sum'] / trainer.sufficient_stats['n'] - \
+        #    trainer.sufficient_stats['mag'] ** 2
+        # trainer.sufficient_stats['norm'] = np.sqrt(trainer.sufficient_stats['sq_sum'])
 
-        # Estimate the pseudo-gradient
+        trainer.train_loss = train_loss
+        trainer.num_samples = num_samples
+
+        # Compute pseudo-gradient
         for p, data in zip(trainer.model.parameters(), model_parameters):
             data = data.cuda() if torch.cuda.is_available() else data
             p.grad = data - p.data
 
-        # Get weights for aggregation, potentially using DGA
-        weight = 1.0
-        add_weight_noise = False
-
-        def filter_weight(weight):
-            '''Handles aggregation weights if something messed them up'''
-            print_rank('Client Weight BEFORE filtering: {}'.format(weight), loglevel=logging.DEBUG)
-            if np.isnan(weight) or not np.isfinite(weight):
-                weight = 0.0
-            elif weight > 100:
-                weight = 100
-            print_rank('Client Weights AFTER filtering: {}'.format(weight), loglevel=logging.DEBUG)
-            return weight
-
-        # Reset gradient stats and recalculate them on the smooth/pseudo gradient
-        if stats_on_smooth_grad:
-            trainer.reset_gradient_power()
-            trainer.estimate_sufficient_stats()
-
-        # Estimate gradient magnitude mean/var
-        mean_grad = trainer.sufficient_stats['sum'] / trainer.sufficient_stats['n']
-        mag_grad = np.sqrt(trainer.sufficient_stats['sq_sum'] / trainer.sufficient_stats['n'])
-        var_grad = trainer.sufficient_stats['sq_sum'] / trainer.sufficient_stats['n'] - mag_grad ** 2
-        norm_grad = np.sqrt(trainer.sufficient_stats['sq_sum'])
-
-        # If we are using softmax based on training loss, it needs DP noise
-        if send_gradients and config['server_config']['aggregate_median'] == 'softmax':
-            # This matters when DP is required
-            add_weight_noise = True
-
-            if 'weight_train_loss' not in config['server_config'] or config['server_config']['weight_train_loss'] == 'train_loss':
-                training_weight = train_loss / num_samples
-            elif config['server_config']['weight_train_loss'] == 'mag_var_loss':
-                training_weight = var_grad
-            elif config['server_config']['weight_train_loss'] == 'mag_mean_loss':
-                training_weight = mean_grad
-            else:
-                training_weight = mag_grad
-
-            try:
-                weight = math.exp(-config['server_config']['softmax_beta']*training_weight)
-            except:
-                print_rank('There is an issue with the weight -- Reverting to {}'.format(eps), loglevel=logging.DEBUG)
-                weight = eps  # TODO: set to min_weight?
-            weight = filter_weight(weight)
-
-        # Add local DP noise here. Note at this point the model parameters are the gradient (diff_data above)
-        # When weight == 0, something went wrong. So we'll skip adding noise and return a zero gradient.
-        if weight > 0.0 and dp_config is not None and dp_config.get('enable_local_dp', False):
-            # Unroll the network grads as 1D vectors
-            flat_grad, params_ids = extensions.privacy.unroll_network(trainer.model.named_parameters(), select_grad=True)
-            grad_norm = flat_grad.norm().cpu().item()
-
-            if dp_config['eps'] < 0: 
-                # clip, but don't add noise
-                if grad_norm > dp_config['max_grad']: 
-                    flat_grad = flat_grad * (dp_config['max_grad'] / grad_norm)
-                    extensions.privacy.update_network(trainer.model.named_parameters(), params_ids, flat_grad, apply_to_grad=True)
-
-            else:
-                # Get Gaussian LDP noise
-                dp_eps = dp_config['eps']
-                delta = dp_config.get('delta', 1e-7) # TODO pre-compute in config
-                weight_ = weight
-
-                # Scaling the weight down so we don't impact the noise too much
-                weight = dp_config.get('weight_scaler', 1) * weight
-                weight = min(dp_config['max_weight'], weight)
-                flat_noisy_grad = dp_config['max_grad'] * (flat_grad / flat_grad.norm())
-                max_sensitivity = np.sqrt(dp_config['max_grad']**2 + (dp_config['max_weight']**2 if add_weight_noise else 0.0))
-                flat_noisy_grad = torch.cat([flat_noisy_grad, torch.tensor([weight], device=flat_noisy_grad.device)], dim=0)
-                flat_noisy_grad, sigma = extensions.privacy.add_gaussian_noise(flat_noisy_grad, dp_eps, max_sensitivity, delta)
-                weight = min(max(flat_noisy_grad[-1].item(), dp_config['min_weight']), dp_config['max_weight'])
-
-                # Scaling the weight back up after noise addition (This is a DP-protect transformation)
-                weight = weight / dp_config.get('weight_scaler', 1)
-                if not add_weight_noise:
-                    weight = weight_
-                flat_noisy_grad = flat_noisy_grad[:-1]
-
-                print_rank('Cosine error from noise {}'.format(torch.nn.functional.cosine_similarity(flat_grad, flat_noisy_grad, dim=0)), loglevel=logging.DEBUG)
-                print_rank('Error from noise is {}'.format((flat_grad-flat_noisy_grad).norm()), loglevel=logging.DEBUG)
-                print_rank('weight is {} and noisy weight is {}'.format(weight_, weight), loglevel=logging.DEBUG)
-
-                # Return back to the network
-                extensions.privacy.update_network(trainer.model.named_parameters(), params_ids, flat_noisy_grad, apply_to_grad=True)
-
-        # In all other cases we can compute the weight after adding noise
-        if send_gradients and not add_weight_noise:        
-            assert config['server_config']['aggregate_median'] == 'mean'
-            assert weight == 1.0
-        
-        if send_gradients:
-            # Weight the gradient and remove gradients of the layers we want to freeze
-            for n, p in trainer.model.named_parameters():
-                p.grad = weight * p.grad
-                if model_config.get('freeze_layer', None) and n == model_config['freeze_layer']:
-                    print_rank('Setting gradient to zero for layer: {}'.format(n), loglevel=logging.INFO)
-                    p.grad.mul_(0)
-
-        # Gradient quantization step -- if quant_threshold is None, the code returns without doing anything
-        quant_model(trainer.model, quant_threshold=quant_threshold, quant_bits=quant_bits, global_stats=False)
+        payload = strategy.generate_client_payload(trainer) if send_gradients else None
 
         # Mark that training (including post-processing) is finished
         end = time.time()
         client_stats['training'] = end - begin_training
         client_stats['full cost'] = end - begin
         print_rank(f'Client training cost {end - begin_training}s', loglevel=logging.DEBUG)      
-        print_rank(f'Client full cost {end - begin}s', loglevel=logging.DEBUG)  
+        print_rank(f'Client full cost {end - begin}s', loglevel=logging.DEBUG)
 
         # Create dictionary that is sent back to server
         client_output = {
             'cs': client_stats, 
             'tl': train_loss, 
-            'wt': weight, 
-            'mg': mag_grad, 
-            'vg': var_grad, 
-            'ng': mean_grad, 
-            'rg': norm_grad,
-            'ns': num_samples
+            'mg': trainer.sufficient_stats['mag'],
+            'vg': trainer.sufficient_stats['var'],
+            'ng': trainer.sufficient_stats['mean'],
+            'rg': trainer.sufficient_stats['norm'],
+            'ns': num_samples,
+            'pl': payload,
         }
        
         # Apply privacy metrics
@@ -564,11 +473,5 @@ class Client:
             
             client_output['ps'] = privacy_stats
 
-        # Finally, we add the actual model gradients or parameters to the output dictionary
-        if send_gradients:
-            client_output['gr'] = [p.grad.to(torch.device('cpu')) for p in trainer.model.parameters()]
-        else:
-            client_output['pm'] = [p.data.to(torch.device('cpu')) for p in trainer.model.parameters()]
-        
         client_output['ts'] = time.time()
         return client_output

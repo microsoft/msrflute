@@ -1,14 +1,12 @@
 model_config:
-    model_type: CNN                                    # class w/ `loss` and `inference` methods
-    model_folder: experiments/classif_cnn/model.py     # file containing class
+    model_type: SuperNet                               # class w/ `loss` and `inference` methods
+    model_folder: experiments/ecg_cnn/model.py         # file containing class
 
 dp_config:
     enable_local_dp: false                             # whether to enable user-level DP
 
 privacy_metrics_config:
     apply_metrics: false                               # cache data to compute additional metrics
-
-strategy: DGA
 
 server_config:   
     wantRL: false                                      # whether to use RL-based meta-optimizers
@@ -23,11 +21,9 @@ server_config:
         gamma: 1.0
         step_size: 100
     val_freq: 50                                       # how many iterations between metric eval on val set
-    rec_freq: 100                                      # how many iterations between metric eval on test set
-    initial_val: true
-    initial_rec: true
+    rec_freq: 500                                      # how many iterations between metric eval on test set
     max_iteration: 2000                                # how many iterations in total
-    num_clients_per_iteration: 10                      # how many clients per iteration
+    num_clients_per_iteration: 25                      # how many clients per iteration
     data_config:                                       # where to get val and test data from
         val:
             batch_size: 10000
@@ -39,24 +35,24 @@ server_config:
             test_data: test_data.hdf5
     type: model_optimization
     aggregate_median: softmax                          # how aggregations weights are computed
+    softmax_beta: 20.0
     initial_lr_client: 0.001                           # learning rate used on client optimizer
     lr_decay_factor: 1.0
     weight_train_loss: train_loss
-    best_model_criterion: f1_score
+    best_model_criterion: loss
     fall_back_to_best_model: false
-    softmax_beta: 1.0
 
 client_config:
     do_profiling: false                                # run profiling and compute runtime metrics
     ignore_subtask: false
     data_config:                                       # where to get training data from
         train:
-            batch_size: 4
+            batch_size: 96
             loader_type: text
             list_of_train_data: train_data.hdf5
-            desired_max_samples: 50000
+            desired_max_samples: 87000
     optimizer_config:                                  # this is the optimizer used by the client
-        type: sgd
+        type: sgd 
         lr: 0.001                                      # this is overridden by `initial_lr_client`
-        momentum: 0.9
+        momentum: 0.90
     type: optimization

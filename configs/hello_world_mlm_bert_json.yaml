@@ -105,7 +105,7 @@ server_config:
             cache_dir: ./cache_dir
     type: model_optimization
     aggregate_median: softmax
-    weight_train_loss: grad_mean_loss 
+    weight_train_loss: mag_mean_loss 
     softmax_beta: 1.00
     initial_lr_client: 0.00001
     lr_decay_factor: 1.0

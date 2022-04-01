@@ -128,7 +128,8 @@ class GRU(T.nn.Module): #DLM_2_0
                 output = {'probabilities': probs_topK.cpu().detach().numpy(),
                               'predictions': preds_topK.cpu().detach().numpy(),
                               'labels': targets.cpu().detach().numpy()}
-        return output, acc.item(), input.shape[0]
+
+        return {'output':output, 'val_acc': acc.item(), 'batch_size': input.shape[0]}
 
     def set_eval(self):
         """

@@ -23,11 +23,12 @@ def extract_indices_from_embeddings(gradients, batch, embed_size, vocab_size):
 
 
 def compute_perplexity(encoded_batch, model):
-    outputs = model.inference(encoded_batch)
-    (batch_size, seq_len, vocab_size) = outputs[0].shape
-    perplex = T.nn.functional.log_softmax(outputs[0], dim=-1)
+    outputs = model.inference(encoded_batch)    
+    (batch_size, seq_len, vocab_size) = outputs['output'].shape    
+    perplex = T.nn.functional.log_softmax(outputs['output'], dim=-1)
     return perplex.reshape(-1, vocab_size)[np.arange(batch_size * seq_len),
                     encoded_batch.reshape(-1)].reshape(batch_size, seq_len)
+
 
 def practical_epsilon_leakage(original_params, model, encoded_batches, is_weighted_leakage=True,
                               max_ratio=1e9, optimizer_config=None):

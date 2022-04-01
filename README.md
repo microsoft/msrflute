@@ -44,7 +44,7 @@ $ cd doc/sphinx
 $ make html
 ```
 
-On Windows, you can use the `make.bat` script.
+On Windows, you can use the `make.bat` script.  It may be necessary to `export PYTHONPATH=../../` for sphinx to find the code.
 
 ## Architecture
 
@@ -123,6 +123,8 @@ This software includes the files listed below from the Huggingface/Transformers 
 This software includes the file extensions/privacy/analysis.py from the Tensorflow/Privacy Library (https://github.com/tensorflow/privacy) as part of Renyi Differential Privacy implementation.
 
 This software includes the script testing/build_vocab.py from LEAF Library (https://github.com/TalwalkarLab/leaf) to create the vocabulary needed to run a testing job. 
+
+This software includes the model implementation of the example ECG Classification | CNN LSTM Attention Mechanism from Kaggle Competition (https://www.kaggle.com/polomarco/ecg-classification-cnn-lstm-attention-mechanism) to reproduce the [ecg_cnn](experiments/ecg_cnn/model.py) experiment.
 
 For more information about third-party OSS licence, please refer to [NOTICE.txt](NOTICE.txt).
 

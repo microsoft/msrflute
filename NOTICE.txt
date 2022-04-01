@@ -19,3 +19,10 @@ This software includes parts of LEAF Library (https://github.com/TalwalkarLab/le
 A Benchmark for Federated Settings. LEAF library is licensed under BSD 2-Clause License, you can find a copy
 of this license at https://github.com/TalwalkarLab/leaf/blob/master/LICENSE.md
 
+This software includes parts of ECG Classification from Kaggle Competition 
+(https://www.kaggle.com/polomarco/ecg-classification-cnn-lstm-attention-mechanism). 
+An example for ECG Classification | CNN LSTM Attention Mechanism. This example is 
+licensed uner Apache License 2.0, you can find a copy of this license at 
+https://www.apache.org/licenses/LICENSE-2.0 
+
+

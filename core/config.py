@@ -3,6 +3,7 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from collections.abc import MutableMapping
+import os
 
 
 # TODO everywhere: choose reasonable defaults.
@@ -32,6 +33,7 @@ def from_dict(cls, config):
 
 
 class Config(MutableMapping):
+    """Base class for configuration classes."""
     def get(self, k: str, default=None):
         result = getattr(self, k, default)
         if result is None:
@@ -75,7 +77,33 @@ class Config(MutableMapping):
 
 @dataclass
 class ModelConfig(Config):
+    """Model configuration
 
+The model configuration specifies model architecture, parameters, and initialization settings.
+
+Attributes:
+    model_type (str): The class name of the model to instantiate. eg GRU.
+
+    model_folder (str): The relative path to the model.py file where model_type is defined. eg experiments/nlg_gru/model.py
+
+    pretrained_model_path (str): The path to the pretrained model.  If None, the model will be randomly initialized using the method defined in weight_init.
+
+    embed_dim (int): specific to GRU models, embedding dimension.
+
+    vocab_size (int): specific to GRU models, the vocabulary size.
+
+    hidden_dim (int): specific to GRU models, the hidden size.
+
+    weight_init (str): ``default``, or ``xavier_normal``, indicating how to randomly initialize the model weights.
+
+    OOV_correct (bool): whether OOV predictions are evaluated as correct, or ignored.
+
+    BERT (BERTConfig): BERT-specific configuration.
+
+ToDo:
+    * remove or sub-class GRU-specific parameters
+    * move OOV_correct to the data configs?
+"""
     model_type: str = None
     model_folder: str = None
     pretrained_model_path: str = None
@@ -99,6 +127,33 @@ class ModelConfig(Config):
 
 @dataclass
 class BERTModelConfig(Config):
+    """BERT model configuration
+
+The BERT configuration specifies huggingface-specific BERT model settings.
+
+Attributes:
+    model_name (str): The name of the BERT model.  eg bert-base-uncased.
+
+    cache_dir (str): Tokenizer cache directory, will be created if it doesn't exist.
+
+    use_fast_tokenizer (bool): Whether to use the fast tokenizer.
+
+    mask_token (str): special token to use for masking.
+
+    task (str): The task to use for BERT.  eg mlm.
+
+    past_index (int): The index of the past state in the BERT model's state dict.
+
+    prediction_loss_only (bool): if False, also produce metrics for predictions and labels.
+
+    process_line_by_line (bool): if True, process the input line-by-line.
+
+ToDo:
+    * check how cache_dir is used- there's a risk of multiple processes reading/writing at the same time.
+    * verify the meaning of past_index (thanks copilot)
+    * document the difference when process_line_by_line is True vs False
+
+    """
     model_name: str = None
     cache_dir: str = None
     use_fast_tokenizer: bool = False
@@ -115,6 +170,19 @@ class BERTModelConfig(Config):
 
 @dataclass
 class BERTTrainingConfig(Config):
+    """BERT training configuration
+
+    Configuration settings for BERT training.
+
+    Attributes:
+        seed (int): random seed for reproducibility.
+
+        label_smoothing_factor (float): label smoothing factor.  Applied label smoothing when the factor is non-zero.
+
+        batch_size (int): batch size.
+
+        max_seq_length (int): maximum input sequence length.
+    """
     seed: int | None = None
     label_smoothing_factor: float | None = None
     batch_size: int | None = None
@@ -127,6 +195,16 @@ class BERTTrainingConfig(Config):
 
 @dataclass
 class BERTConfig(Config):
+    """BERT configuration
+    Specifies the model and training configuration for huggingface modeling scenarios.
+
+    Attributes:
+        loader_type (str): loader type hint. eg 'text'
+
+        model (BERTModelConfig): BERT model configuration.
+
+        training (BERTTrainingConfig): BERT training configuration.
+    """
     loader_type: str = None
     model: BERTModelConfig = None
     training: BERTTrainingConfig = None
@@ -146,6 +224,56 @@ class BERTConfig(Config):
 
 @dataclass
 class PrivacyConfig(Config):
+    """Privacy configuration
+
+    The privacy configuration specified differential privacy settings for the model.
+    The user can choose between local or global DP.  When local DP is enabled, a global
+    epsilon can be computed by applying the RDP accountant (see extensions/privacy).
+    The `eps` parameter is used to specify the privacy budget for local DP.  Conversely, when
+    global DP is enabled, `eps` is ignored and `global_sigma` directly specifies the global
+    Gaussian noise.   `max_grad` specifies the clipping parameter for local or global DP,
+    `max_weight` specifies the clipping parameter for the local gradient aggregation weight
+    (applies to softmax aggregation), and `weight_scaler` indicates how the aggregation weight
+    is scaled before noise addition, and unscaled afterward. This enables a single eps/sigma
+    parameter for both the gradient and its weight.
+
+    Example:
+       This example applies local DP with eps=1000. The global epsilon will be computing using Renyi DP accounting.
+
+       .. code-block:: yaml
+
+            dp_config:
+                # Local dp clips and adds noise on the client and centrally accumulates the privacy budget.
+                enable_local_dp: true
+                eps: 100 # epsilon
+                max_grad: 0.008  # max gradient
+                # The max_weight and min_weight should be already scaled by weight_scaler
+                # Because we scale down the weight using weight_scalar -> clip -> add noise -> scale back up.
+                max_weight: 0.0001
+                weight_scaler: 0.0001
+                min_weight: 0.00009
+
+
+    Attributes:
+        enable_local_dp (bool): whether to enable local DP.
+
+        enable_global_dp (bool): whether to enable global DP.
+
+        eps (float): the privacy budget for local DP.
+
+        delta (float): the privacy delta parameter for local DP.
+
+        global_sigma (float): the global Gaussian noise for global DP.
+
+        max_grad (float): the gradient clipping parameter.
+
+        max_weight (float): the aggregation weight clipping parameter.
+
+        weight_scaler (float): the aggregation weight scaling parameter.
+
+        min_weight (float): the minimum per-gradient aggregation weight.
+
+    """
     enable_local_dp: bool = False
     enable_global_dp: bool = False
     eps: float | None = None
@@ -163,6 +291,28 @@ class PrivacyConfig(Config):
 
 @dataclass
 class PrivacyMetricsConfig(Config):
+    """Privacy metrics configuration
+
+    This optional feature computes local privacy metrics for computed gradients,
+    and optionally filters gradients based on estimated privacy loss.
+
+    Attributes:
+        apply_metrics (bool): whether to compute privacy metrics.
+
+        apply_indices_extraction (bool): whether to attempt local data reconstruction.
+
+        allowed_word_rank (int): threshold for successful reconstruction.
+
+        apply_leakage_metric (bool): whether to compute a privacy leakage metric based on the ratio of perplexities before and after local training.
+
+        max_leakage (float): the maximum allowed privacy leakage before filtering
+
+        adaptive_leakage_threshold (float): if non-zero, compute an adaptive leakage threshold based on the previous round of training.  For example at 0.95, the max_leakage will be adjusted to reject 5% of gradients, based on the previous round of training.
+
+        is_leakage_weighted (bool): scales the leakage by the maximum likelihood of the pre- and post- likelihood tensors. ie the worst-case leakage is weighted by the worst-case likelihood that we might encounter it.
+
+        attacker_optimizer_config (OptimizerConfig): the optimizer configuration for the reconstruction attack.
+    """
     apply_metrics: bool = False
     apply_indices_extraction: bool = False
     allowed_word_rank: int | None = None
@@ -187,6 +337,12 @@ class PrivacyMetricsConfig(Config):
 
 @dataclass
 class OptimizerConfig(Config):
+    """Optimizer configuration
+
+    Pass any pytorch-supported optimizer configuration. The object should include
+    a `type` field which indicates the pytorch optimizer type that should be invoked.
+    This will be stripped from the object before being passed to the Optimizer's init.
+    """
     type: str = None
     # Leave this open for any keyword arguments, so we don't break torch constructors
     # In the future we can limit keywords to torch-specific ones.
@@ -206,6 +362,18 @@ class OptimizerConfig(Config):
 
 @dataclass
 class AnnealingConfig(Config):
+    """Learning rate annealing configuration
+
+
+    Attributes:
+        type (str): the type of annealing. Supported methods: :code:`step_lr`, :code:`multi_step_lr`, :code:`rampup-keep-expdecay-keep`, :code:`val_loss`.
+
+        step_interval (str): the interval at which to step the learning rate. Supported intevals: :code:`epoch`, :code:`batch`.
+
+        gamma (float): the learning rate decay factor.
+
+        step_size (int): the interval between annealing operations.
+    """
     type: str = None
     step_interval: str = None
     gamma: float | None = None
@@ -266,6 +434,20 @@ class DatasetConfig(Config):
 
 @dataclass
 class DataConfig(Config):
+    """Data configurations
+
+    Client and server configs may each contain a data config, consisting of train, test, and validate datasets.
+    A typical configuration will define test and validate in the server data config, while the training data is defined in the client config.
+    Optionally, the server can have a training config which defines server-side training data.
+
+
+    Attributes:
+        train (DatasetConfig): the training dataset configuration.
+
+        val (DatasetConfig): the validation dataset configuration.
+
+        test (DatasetConfig): the test dataset configuration.
+    """
     train: DatasetConfig = None
     val: DatasetConfig = None
     test: DatasetConfig = None
@@ -283,6 +465,15 @@ class DataConfig(Config):
 
 @dataclass
 class ServerReplayConfig(Config):
+    """Server replay configuration
+
+    When server-side training data is defined, this config defines how it is applied after each client training round.
+
+    Attributes:
+        server_iterations (int): the number of iterations to run over server-side training data for.
+
+        optimizer_config (OptimizerConfig): the optimizer configuration to use for the server.
+    """
     server_iterations: int
     optimizer_config: OptimizerConfig
 
@@ -296,8 +487,42 @@ class ServerReplayConfig(Config):
 
 @dataclass
 class RLConfig(Config):
+    """Reinforcement learning configuration
+
+    RL can be applied during dynamic gradient aggregation to speed up convergence. This configuration defines the settings for server-side RL to train the model for DGA.
+
+    Attributes:
+        marginal_update_RL (bool): whether to update the RL model when the loss is small.
+
+        RL_path (str): the path to the RL model to train.
+
+        RL_path_global (bool): whether the global training output path should be prepended to RL_path.
+
+        model_descriptor_RL (str): string to append to the model filename.
+
+        network_params (list): List of layer widths in the RL network. eg: 300,128,128,128,64,100
+
+        initial_epsilon (float): the initial epsilon value for the epsilon-greedy policy.
+
+        final_epsilon (float): the final epsilon value for the epsilon-greedy policy.
+
+        epsilon_gamma (float): the decay rate for the epsilon-greedy policy.
+
+        max_replay_memorize_size (int): the maximum number of samples to store in the replay memory.
+
+        minibatch_size (int): the size of the minibatch to use for training.
+
+        gamma (float): the discount factor for the RL model.
+
+        optimizer_config (OptimizerConfig): the optimizer configuration to use for the RL model.
+
+        annealing_config (AnnealingConfig): the annealing configuration to use for the RL model.
+
+
+    """
     marginal_update_RL: bool = False
     RL_path: str = None
+    RL_path_global: bool = False
     model_descriptor_RL: str = None
     network_params: list = None
     initial_epsilon: float | None = None
@@ -324,6 +549,64 @@ class RLConfig(Config):
 
 @dataclass
 class ServerConfig(Config):
+    """Server configuration
+
+    The server configuration defines the server-side settings.
+
+    Attributes:
+        resume_from_checkpoint (bool): whether to resume training from a checkpoint.
+
+        max_iterations (int): the maximum number of iterations (federated training rounds) to run.
+
+        num_clients (int): the number of clients to use per training round.
+
+        optimizer_config (OptimizerConfig): the optimizer configuration to use server-side.
+
+        annealing_config (AnnealingConfig): the learning rate annealing configuration to use server-side.
+
+        val_freq (int): the number of iterations between validation evaluation runs.
+
+        rec_freq (int): the number of iterations between test evaluation runs.
+
+        initial_val (bool): whether to run validation before initiating training.
+
+        initial_rec (bool): whether to run test before initiating training.
+
+        wantRL (bool): whether to train the RL model.
+
+        RL (RLConfig): the RL configuration to use if wantRL is True.
+
+        data_config (DataConfig): the data configuration to use server-side.
+
+        type (str): the type of server. Currently this parameter is ignored and OptimizationServer is always used. However there is some validation code that checks for one of the following values:
+
+            - model_averaging
+            - optimization
+            - model_optimization
+            - cluster_finetuning
+            - cluster_parallel
+
+        aggregate_median (str): the aggregation method to use (DGA softmax, or mean). Note that this only applies when the global aggregation strategy is DGA.
+
+        weight_train_loss (str): when softmax DGA is enabled, what metric to use for weighting. One of
+
+            - train_loss
+            - mag_var_loss
+            - mag_mean_loss
+
+        softmax_beta (float): the beta value to use for the softmax DGA.
+
+        max_weight (float): the maximum allowed client weight.
+
+        initial_lr_client (float): the initial learning rate for each client.
+
+        lr_decay_factor (float): the client learning rate decay factor.
+
+        best_model_criterion (str): The metric to choose when resetting to the best model so far.
+
+        server_replay_config (ServerReplayConfig): the server replay configuration to use for any server-side training.
+
+    """
     resume_from_checkpoint: bool = False
     max_iteration: int | None = None
     num_clients_per_iteration: int | None = None
@@ -331,17 +614,19 @@ class ServerConfig(Config):
     annealing_config: AnnealingConfig = None
     val_freq: int | None = None
     rec_freq: int | None = None
-    initial_val: bool = False
-    initial_rec: bool = False
+    initial_val: bool = True
+    initial_rec: bool = True
     wantRL: bool = False
+    RL: RLConfig = None
     data_config: DataConfig = None
     type: str = None
     aggregate_median: str = None
     weight_train_loss: str = None
     softmax_beta: float | None = None
+    max_weight: float | None = None
     initial_lr_client: float | None = None
     lr_delay_factor: float | None = None
-    best_model_criterion: str = None
+    best_model_criterion: str = 'loss'
     server_replay_config: ServerReplayConfig = None
 
     @staticmethod
@@ -361,6 +646,9 @@ class ServerConfig(Config):
             elif k == 'server_replay_config':
                 result.server_replay_config = \
                     ServerReplayConfig.from_dict(config[k])
+            elif k == 'RL':
+                result.RL = \
+                    RLConfig.from_dict(config[k])
             else:
                 setattr(result, k, config[k])
         return result
@@ -368,6 +656,34 @@ class ServerConfig(Config):
 
 @dataclass
 class ClientConfig(Config):
+    """
+    Client configuration
+
+    The client configuration defines the client-side settings.
+
+    Attributes:
+        meta_learning (str): Set to 'basic'.  Currently ignored.
+
+        stats_on_smooth_grad (bool): When true, gradient statistics are reset each round. Currently, it appears these statistics aren't used.
+
+        ignore_subtask (bool): Used to determine which model loss to use. In most cases just set to False.
+
+        num_skips_threshold (int): previously used to skip users, deprecated.
+
+        copying_train_data (bool): has no effect.
+
+        do_profiling (bool): whether to enable client-side profiling.
+
+        data_config (DataConfig): the data configuration to use client-side.
+
+        type (str): the type of client. Currently this parameter is ignored?
+
+        meta_optimizer_config (OptimizerConfig): the optimizer configuration to use for meta-learning.
+
+        optimizer_config (OptimizerConfig): the optimizer configuration to use for client-side training.
+
+        annealing_config (AnnealingConfig): the learning rate annealing configuration to use client-side.
+    """
     meta_learning: str = None
     stats_on_smooth_grad: bool = False
     ignore_subtask: bool = False
@@ -402,11 +718,197 @@ class ClientConfig(Config):
 
 @dataclass
 class FLUTEConfig(Config):
+    """
+    FLUTEConfig represents the global configuration for a training job.
+
+    Attributes:
+        model_config (ModelConfig): the model configuration to use.
+
+        dp_config (PrivacyConfig): differential privacy configuration.
+
+        strategy (str): Aggregation strategy, eg DGA or FedAvg.
+
+        server_config (ServerConfig): the server configuration to use.
+
+        client_config (ClientConfig): the client configuration to use.
+
+    """
     model_config: ModelConfig = None
     dp_config: PrivacyConfig = None
     privacy_metrics_config: PrivacyMetricsConfig = None
+    strategy: str = None
     server_config: ServerConfig = None
     client_config: ClientConfig = None
+
+    # TODO: clean up all this validation code.
+    def _check_server_config(config, default_server_conf):
+
+        assert "server_config" in config, "server config setting is missing"
+
+        # Checking parameters for server-side training
+        if "train" in config["server_config"]["data_config"]:
+            if "train_data_server" in config["server_config"]["data_config"]["train"]:
+                assert "server_replay_config" in config["server_config"], "Training dataset is defined on the server but training parameters are not set"
+                assert "optimizer_config" in config["server_config"]["server_replay_config"], "Missing \"optimizer_config\" in server_replay server training config"
+                assert "server_iterations" in config["server_config"]["server_replay_config"], "Missing \"server_iterations\" in server_replay server training config"
+
+        # Setting the default values if missing
+        for key in default_server_conf.keys():
+            if key not in config["server_config"]:
+                config["server_config"][key] = default_server_conf[key]
+
+        server_type = config["server_config"]["type"]
+        if not (server_type == "model_averaging" or \
+                server_type == "optimization" or \
+                server_type == "model_optimization" or \
+                server_type == "cluster_finetuning" or \
+                server_type == "cluster_parallel"):
+            raise ValueError("Invalid server type {} in federated learning config".format(server_type))
+
+        assert "best_model_criterion" in config["server_config"], "Missing \"best_model_criterion\" in server config"
+
+        if server_type == "model_optimization" or server_type == "cluster_finetuning" or server_type == "cluster_parallel":
+            assert "initial_lr_client" in config["server_config"], "Missing \"initial_lr_client\" in server config"
+            assert "lr_decay_factor" in config["server_config"], "Missing \"lr_decay_factor\" in server config"
+            assert "aggregate_median" in config["server_config"], "Missing \"aggregate_median\" in server config"
+
+        if "nbest_task_scheduler" in config["server_config"]:
+            assert "num_tasks" in config["server_config"]["nbest_task_scheduler"], "Define \"num_tasks\" in [\"nbest_task_scheduler\"]"
+            assert "iteration_per_task" in config["server_config"]["nbest_task_scheduler"], "Define \"iteration_per_task\" in [\"nbest_task_scheduler\"]"
+            assert len(config["server_config"]["nbest_task_scheduler"]["num_tasks"]) == len(config["server_config"]["nbest_task_scheduler"]["iteration_per_task"]), \
+                "Length mismatched: {}!={}".format(len(config["server_config"]["nbest_task_scheduler"]["num_tasks"]), len(config["server_config"]["nbest_task_scheduler"]["iteration_per_task"]))
+
+        data_path = config['data_path']
+        if 'vocab_dict' in config["server_config"]["data_config"]["val"]:
+            config["server_config"]["data_config"]["val"]["vocab_dict"] = os.path.join(data_path, config["server_config"]["data_config"]["val"]["vocab_dict"])
+        if 'vocab_dict' in config["server_config"]["data_config"]["test"]:
+            config["server_config"]["data_config"]["test"]["vocab_dict"] = os.path.join(data_path, config["server_config"]["data_config"]["test"]["vocab_dict"])
+        if 'vocab_dict' in config["server_config"]["data_config"]["test"]:
+            config["server_config"]["data_config"]["train"]["vocab_dict"] = os.path.join(data_path, config["server_config"]["data_config"]["train"]["vocab_dict"])
+
+        # BERT specific parameters
+        if 'model_config' in config and 'BERT' in config['model_config']:
+            if 'model_name_or_path' in config['model_config']['BERT']['model']:
+                config['server_config']['data_config']['val']['model_name_or_path'] = config['model_config']['BERT']['model']['model_name_or_path']
+                config['server_config']['data_config']['test']['model_name_or_path'] = config['model_config']['BERT']['model']['model_name_or_path']
+            else:
+                config['server_config']['data_config']['val']['model_name_or_path'] = config['model_config']['BERT']['model']['model_name']
+                config['server_config']['data_config']['test']['model_name_or_path'] = config['model_config']['BERT']['model']['model_name']
+
+            if 'process_line_by_line' in config['model_config']['BERT']['model']:
+                config['server_config']['data_config']['val']['process_line_by_line'] = config['model_config']['BERT']['model']['process_line_by_line']
+                config['server_config']['data_config']['test']['process_line_by_line'] = config['model_config']['BERT']['model']['process_line_by_line']
+
+        if "initial_val" in config['server_config']:
+            config['server_config']['initial_val'] = config['server_config']['initial_val']
+        else:
+            config['server_config']['initial_val'] = False
+
+        if "initial_rec" in config['server_config']:
+            config['server_config']['initial_rec'] = config['server_config']['initial_rec']
+        else:
+            config['server_config']['initial_rec'] = False
+
+        return config
+
+    def _check_client_config(config, default_client_conf):
+
+        assert "client_config" in config, "client config setting is missing"
+
+        # Setting the default values if missing
+        for key in default_client_conf.keys():
+            if key not in config["client_config"]:
+                config["client_config"][key] = default_client_conf[key]
+
+        client_type = config["client_config"]["type"]
+        if not (client_type == "gradient_computation" or client_type == "optimization"):
+            raise ValueError("Invalid client option {} in federated learning config".format(client_type))
+
+        if "ss_config" not in config["client_config"]:
+            config["client_config"]["ss_config"] = None
+
+        if "list_of_train_data" in config["client_config"]["data_config"]["train"] and "train_data" in config["client_config"]["data_config"]["train"]:
+            raise ValueError("\"list_of_train_data\" and \"train_data\" cannot be defined at the same time")
+
+        assert "list_of_train_data" in config["client_config"]["data_config"]["train"] or "train_data" in config["client_config"]["data_config"]["train"], "Define either \"list_of_train_data\" and \"train_data\""
+
+        # Adjust path to vocab_dict
+        data_path = config['data_path']
+        if 'vocab_dict' in config["client_config"]["data_config"]["train"]:
+            config["client_config"]["data_config"]["train"]["vocab_dict"] = os.path.join(data_path, config["client_config"]["data_config"]["train"]["vocab_dict"])
+
+        # BERT specific parameters
+        if 'model_config' in config and 'train' in config['client_config']['data_config'] and 'BERT' in config['model_config']:
+            if 'model_name_or_path' in config['model_config']['BERT']['model']:
+                config['client_config']['data_config']['train']['model_name_or_path'] = config['model_config']['BERT']['model']['model_name_or_path']
+            else:
+                config['client_config']['data_config']['train']['model_name_or_path'] = config['model_config']['BERT']['model']['model_name']
+            if 'process_line_by_line' in config['model_config']['BERT']['model']:
+                config['client_config']['data_config']['train']['process_line_by_line'] = config['model_config']['BERT']['model']['process_line_by_line']
+
+        return config
+
+    def validate(config):
+
+        # Create dictionaries w/ parameters
+        default_data_conf = {
+            "input_dim": 300,
+            "batch_size": 40,
+            "loader_type": "text",
+            "prepend_datapath": False,
+            "pin_memory": True,
+            "num_frames": 0,
+            "desired_max_samples": 300,
+            "max_grad_norm": 5.0,        # max_grad_norm for gradient clipping
+            "num_workers": 1,
+            "max_batch_size": 0,         # maximum number of batch size; if 0, no limitation is applied
+            "unsorted_batch": False      # do not sort when making batch; this is inefficient in terms of batch, but could be efficient in terms of accuracy
+        }
+
+        default_server_conf = {
+            "val_freq": 1,
+            "rec_freq": 8,
+            "max_iteration": 100000000,
+            "type": "optimization",
+            "data_config": default_data_conf,
+            "aggregate_median": None,
+            "best_model_criterion": "loss",
+            "fall_back_to_best_model": False,
+            "num_clients_per_iteration": -1
+        }
+
+        default_client_conf = {
+            "copying_train_jsonls": True,
+            "type": "gradient_computation",
+            "data_config": default_data_conf,
+        }
+    
+        assert "data_path" in config, "data_path is missing from config"
+        assert "experiment_name" in config, "experiment_name is missing from config"
+        assert "output_path" in config, "output_path is missing from config"
+        assert "task" in config["server_config"], "task is missing from server_config"
+        assert "task" in config["client_config"], "task is missing from client_config"
+
+        assert "num_clients" not in config["server_config"]["data_config"], "Remove \"num_clients\" from server data_config since this is a reserved key"
+        assert "num_clients" not in config["client_config"]["data_config"], "Remove \"num_clients\" from client data_config since this is a reserved key"
+
+        # Make sure the pretrained model is found in the correct place
+        if "pretrained_model_path" in config["model_config"]["model_type"]:
+            config["model_config"]["model_type"]["pretrained_model_path"] = os.path.join(config["data_path"], config["model_config"]["model_type"]["pretrained_model_path"])
+        if "pretrained_model_path" in config["model_config"]:
+            config["model_config"]["pretrained_model_path"] = os.path.join(config["data_path"], config["model_config"]["pretrained_model_path"])
+
+        config._check_server_config(default_server_conf)
+        config._check_client_config(default_client_conf)
+
+        # RL-related options
+        if config["server_config"].get("wantRL", False):
+            if config["server_config"]["RL"].get("RL_path_global", True):
+                config["server_config"]["RL"]["RL_path"] = os.path.join(config["output_path"],
+                                                                        config["server_config"]["RL"]["RL_path"])
+            else:
+                config["server_config"]["RL"]["RL_path"] = os.path.join(config["output_path"], config["experiment_name"],
+                                                                        config["server_config"]["RL"]["RL_path"])
 
     @staticmethod
     def from_dict(config) -> FLUTEConfig:
@@ -418,9 +920,11 @@ class FLUTEConfig(Config):
             PrivacyMetricsConfig.from_dict(config['privacy_metrics_config']) \
             if 'privacy_metrics_config' in config else None
 
+        strategy = config.get('strategy', 'DGA')
+
         return FLUTEConfig(
             ModelConfig.from_dict(config['model_config']),
-            dp_config, priv_metrics_config,
+            dp_config, priv_metrics_config, strategy,
             ServerConfig.from_dict(config['server_config']),
             ClientConfig.from_dict(config['client_config'])
         )

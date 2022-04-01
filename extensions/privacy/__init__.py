@@ -3,6 +3,7 @@
 
 import numpy as np
 import torch as T
+import logging
 import math
 import json
 from utils import print_rank
@@ -148,6 +149,56 @@ def apply_global_dp(config, model, num_clients_curr_iter, select_grad=True, metr
         if metric_logger is None:
             metric_logger = Run.get_context().log
         metric_logger('Gradient Norm', flat_grad.norm().cpu().item())
+
+
+def apply_local_dp(trainer, weight, dp_config, add_weight_noise):
+    '''Apply client-side DP, possibly given a data-dependent aggregation weight
+
+    Args:
+        trainer (core.Trainer object): trainer on client.
+        dp_config (dict): DP config on original config file.
+        add_weight_noise (bool): whether noise should be added to aggregation weight.
+    '''
+
+    # Unroll the network grads as 1D vectors
+    flat_grad, params_ids = unroll_network(trainer.model.named_parameters(), select_grad=True)
+    grad_norm = flat_grad.norm().cpu().item()
+
+    if dp_config['eps'] < 0:
+        # clip, but don't add noise
+        if grad_norm > dp_config['max_grad']:
+            flat_grad = flat_grad * (dp_config['max_grad'] / grad_norm)
+            update_network(trainer.model.named_parameters(), params_ids, flat_grad, apply_to_grad=True)
+
+    else:
+        # Get Gaussian LDP noise
+        dp_eps = dp_config['eps']
+        delta = dp_config.get('delta', 1e-7) # TODO pre-compute in config
+        weight_ = weight
+
+        # Scaling the weight down so we don't impact the noise too much
+        weight = dp_config.get('weight_scaler', 1) * weight
+        weight = min(dp_config['max_weight'], weight)
+        flat_noisy_grad = dp_config['max_grad'] * (flat_grad / flat_grad.norm())
+        max_sensitivity = np.sqrt(dp_config['max_grad']**2 + (dp_config['max_weight']**2 if add_weight_noise else 0.0))
+        flat_noisy_grad = T.cat([flat_noisy_grad, T.tensor([weight], device=flat_noisy_grad.device)], dim=0)
+        flat_noisy_grad, _ = add_gaussian_noise(flat_noisy_grad, dp_eps, max_sensitivity, delta)
+        weight = min(max(flat_noisy_grad[-1].item(), dp_config['min_weight']), dp_config['max_weight'])
+
+        # Scaling the weight back up after noise addition (This is a DP-protect transformation)
+        weight = weight / dp_config.get('weight_scaler', 1)
+        if not add_weight_noise:
+            weight = weight_
+        flat_noisy_grad = flat_noisy_grad[:-1]
+
+        print_rank('Cosine error from noise {}'.format(T.nn.functional.cosine_similarity(flat_grad, flat_noisy_grad, dim=0)), loglevel=logging.DEBUG)
+        print_rank('Error from noise is {}'.format((flat_grad-flat_noisy_grad).norm()), loglevel=logging.DEBUG)
+        print_rank('weight is {} and noisy weight is {}'.format(weight_, weight), loglevel=logging.DEBUG)
+
+        # Return back to the network
+        update_network(trainer.model.named_parameters(), params_ids, flat_noisy_grad, apply_to_grad=True)
+
+    return weight
 
 
 def update_privacy_accountant(config, num_clients, curr_iter, num_clients_curr_iter):

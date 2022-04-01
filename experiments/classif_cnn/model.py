@@ -1,9 +1,11 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
+
 import torch
 from torch import nn
 from torch.nn import functional as F
+from sklearn.metrics import f1_score
 
 
 class Net(nn.Module):
@@ -50,8 +52,9 @@ class CNN(nn.Module):
 
         n_samples = features.shape[0]
         accuracy = torch.mean((torch.argmax(output, dim=1) == labels).float()).item()
+        f1 = f1_score(labels.cpu(), torch.argmax(output, dim=1).cpu(), average='micro')
 
-        return output, accuracy, n_samples
+        return {'output':output, 'val_acc': accuracy, 'batch_size': n_samples, 'f1_score':f1}
         
     def set_eval(self):
         '''Bring the model into evaluation mode'''
