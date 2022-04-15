@@ -36,7 +36,9 @@ This config uses 1 MPI node with 3 workers (1 server, 2 clients). The config fil
 
 ## Documentation
 
-The documentation is inside the `doc/sphinx` folder. To build the docs on Linux:
+Online documentation is available at https://microsoft.github.io/msrflute/
+
+Locally, the documentation is inside the `doc/sphinx` folder. To build the docs on Linux:
 
 ```
 $ pip install sphinx
