@@ -35,6 +35,7 @@ from utils import (
     make_optimizer,
     print_rank,
     scrub_empty_clients,
+    to_device,
 )
 from utils.dataloaders_utils import (
     make_train_dataloader,
@@ -197,12 +198,12 @@ class Client:
         push the model to the client (see federated.py).
 
         Args:
-            client_data (tuple): client data and config. It is a tuple with 4
+            client_data (tuple): client data and config. It is a tuple with 3
                 components; importantly, the second component is a dict
                 containing the data, and the third component is a dict with the
                 config parsed from the YAML file.
             server_data (tuple): server data (model parameters mostly). It is
-                a tuple with 3 components; importantly, the third component
+                a tuple with 2 components; importantly, the second component
                 consists of the current model parameters.
             mode (str): whether to `test` or `validate`.
             model (torch.nn.Module): actual model without parameters.
@@ -210,7 +211,7 @@ class Client:
 
         # Process inputs and initialize variables
         _, data_strct, config, _ = client_data
-        _, _, model_parameters = server_data
+        _, model_parameters = server_data
         config = copy.deepcopy(config)
 
         begin = time.time()  
@@ -230,12 +231,11 @@ class Client:
         # Set model parameters
         n_layers, n_params = len([f for f in model.parameters()]), len(model_parameters)
         print_rank(f'Copying model parameters... {n_layers}/{n_params}', loglevel=logging.DEBUG)
-        model.cuda() if torch.cuda.is_available() else model
+        model = to_device(model)
         for p, data in zip(model.parameters(), model_parameters):
             p.data = data.detach().clone().cuda() if torch.cuda.is_available() else data.detach().clone()
         print_rank(f'Model setup complete. {time.time() - begin}s elapsed.', loglevel=logging.DEBUG)
 
-     
         num_instances = sum(data_strct['num_samples'])
         print_rank(f'Validating {num_instances}', loglevel=logging.DEBUG)
 
@@ -256,10 +256,9 @@ class Client:
                 parsed from the YAML file, and a bool indicating whether or not
                 gradients should be sent.
             server_data (tuple): server data (model parameters mostly). It is
-                a tuple consisting of 3 components; importantly, the first is
-                a float giving the client's learning rate, and the third a list
-                of torch.Tensor's with current model parameters. The second one
-                is not used, right now.
+                a tuple consisting of 2 components; importantly, the first is
+                a float giving the client's learning rate, and the second a list
+                of torch.Tensor's with current model parameters. 
             model (torch.nn.Module): actual model without parameters.
             data_path (str): where to get data from.
             eps (float): lower bound for aggregation weights.
@@ -271,7 +270,7 @@ class Client:
 
         # Process inputs and initialize variables
         client_id, data_strct, config, send_gradients = client_data
-        initial_lr, _, model_parameters = server_data
+        initial_lr, model_parameters = server_data
         config = copy.deepcopy(config)
 
         model_config = config['model_config']
@@ -325,7 +324,7 @@ class Client:
         # Set model parameters
         n_layers, n_params = len([f for f in model.parameters()]), len(model_parameters)
         print_rank(f'Copying model parameters... {n_layers}/{n_params}', loglevel=logging.DEBUG)
-        model.cuda() if torch.cuda.is_available() else model
+        model = to_device(model)
         for p, data in zip(model.parameters(), model_parameters):
             p.data = data.detach().clone().cuda() if torch.cuda.is_available() else data.detach().clone()
         print_rank(f'Model setup complete. {time.time() - begin}s elapsed.', loglevel=logging.DEBUG)
@@ -393,18 +392,13 @@ class Client:
         # Now computed when the sufficient stats are updated.
         assert 'sum' in trainer.sufficient_stats
         assert 'mean' in trainer.sufficient_stats
-        # trainer.sufficient_stats['mean'] = trainer.sufficient_stats['sum'] / trainer.sufficient_stats['n']
-        # trainer.sufficient_stats['mag'] = np.sqrt(trainer.sufficient_stats['sq_sum'] / trainer.sufficient_stats['n'])
-        # trainer.sufficient_stats['var'] = trainer.sufficient_stats['sq_sum'] / trainer.sufficient_stats['n'] - \
-        #    trainer.sufficient_stats['mag'] ** 2
-        # trainer.sufficient_stats['norm'] = np.sqrt(trainer.sufficient_stats['sq_sum'])
 
         trainer.train_loss = train_loss
         trainer.num_samples = num_samples
 
         # Compute pseudo-gradient
         for p, data in zip(trainer.model.parameters(), model_parameters):
-            data = data.cuda() if torch.cuda.is_available() else data
+            data = to_device(data)
             p.grad = data - p.data
 
         payload = strategy.generate_client_payload(trainer) if send_gradients else None

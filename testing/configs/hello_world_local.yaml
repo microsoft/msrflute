@@ -5,6 +5,7 @@ model_config:
     vocab_size: 10000
     hidden_dim: 512
     OOV_correct: false
+
 # Configuration for differential privacy
 dp_config:
     # Local dp clips and adds noise on the client and centrally accumulates the privacy budget.
@@ -16,6 +17,7 @@ dp_config:
     max_weight: 0.0001
     weight_scaler: 0.0001
     min_weight: 0.00009
+
 privacy_metrics_config:
     apply_metrics: true
     apply_indices_extraction: true
@@ -32,6 +34,10 @@ privacy_metrics_config:
         lr: 0.03
         type: adamax
         amsgrad: false
+
+# Select the Federated optimizer to use (e.g. DGA or FedAvg)
+strategy: DGA
+
 # server_config determines all the server-side settings
 server_config:
     wantRL: false  # use reinforcement learning to train the optimizer?
@@ -59,21 +65,10 @@ server_config:
             gamma: 0.95
     # configuration for the server-side optimizer. 
     optimizer_config:
-        # this section for sgd
-        #type: sgd 
-        #lr: 0.001
-        # this section for adam
         type: adamax
         amsgrad: true
         lr: 0.0005     
-        # this section for adamax
-        #type: adamax
-        #amsgrad: true
-        #lr: 0.002   
-        # this section for lamb
-        #lr: 0.1
-        #weight_decay: 0.0 #0.005
-        #type: lamb
+
     # This section configures how the learning rate decays
     annealing_config:
         type: step_lr
@@ -82,6 +77,8 @@ server_config:
         step_size: 100  # apply gamma every step_size iterations
     val_freq: 3  # evaluate validation set once every val_freq rounds
     rec_freq: 3 # evaluate test set once every rec_freq rounds
+    initial_val: true
+    initial_rec: true
     max_iteration: 3  # total rounds of FL
     num_clients_per_iteration: 5  # number of clients to sample per round
     # server-side data configuration
@@ -110,23 +107,6 @@ server_config:
         # Note this is NOT the main training data configuration, which is configured in the 
         # client config.  This section is ignored unless you are running replay data.
         # If you want to run replay data- set a path name for train_data_server.
-        train:
-            batch_size: 128
-            loader_type: text
-            tokenizer_type: not_applicable
-            prepend_datapath: false
-            train_data: null
-            train_data_server: null
-            vocab_dict: ./models/vocab_reddit.vocab
-            pin_memory: true
-            num_workers: 0
-            num_frames: 2400
-            desired_max_samples: 500
-            max_grad_norm: 10.0
-            max_batch_size: 128
-            max_num_words:  25
-            unsorted_batch: true
-        # test data configuration
         test:
             batch_size: 128
             loader_type: text
@@ -149,14 +129,9 @@ server_config:
     lr_decay_factor: 1.0
     best_model_criterion: loss  # choose best model based on minimal loss, for checkpointing
     fall_back_to_best_model: false  # if a model degrades, use the previous best
-    # replay configuration.  This is only applied if the server-side training data is fully configured and loaded.
-    server_replay_config:
-        server_iterations: 50
-        optimizer_config:
-            lr: 0.00002
-            amsgrad: true
-            type: adam
 # end server config
+
+
 # client config dictates the learning parameters for client-side model updates
 # most parameters are similar to the server config.
 # Note the core training data is defined in this config.

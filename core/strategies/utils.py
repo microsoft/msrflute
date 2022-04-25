@@ -5,7 +5,7 @@ import logging
 
 import numpy as np
 
-from utils import print_rank, to_cuda
+from utils import print_rank, to_device
 
 
 def filter_weight(weight):
@@ -28,6 +28,6 @@ def aggregate_gradients_inplace(model, gradients):
 
     for p, client_grad in zip(model.parameters(), gradients):
         if p.grad is None:
-            p.grad = to_cuda(client_grad)
+            p.grad = to_device(client_grad)
         else:
-            p.grad += to_cuda(client_grad)
+            p.grad += to_device(client_grad)

@@ -13,7 +13,8 @@ from utils import ( make_lr_scheduler,
                     print_rank,
                     torch_save,
                     try_except_save,
-                    make_optimizer)
+                    make_optimizer,
+                    to_device)
 
 class SequenceWise(nn.Module):
     def __init__(self, module):
@@ -192,9 +193,9 @@ class RL:
 
         if random.random() <= self.epsilon:
             print_rank("Performed random action!")
-            action= torch.rand(self.out_size).cuda() if torch.cuda.is_available() else torch.rand(self.out_size)
+            action= to_device(torch.rand(self.out_size))
         else:
-            state = torch.from_numpy(state).cuda() if torch.cuda.is_available() else torch.from_numpy(state)
+            state = to_device(torch.from_numpy(state))
             print_rank(f'RL_state: {state.shape}')
             action= self.model(state.float())
         return action
@@ -226,10 +227,9 @@ class RL:
         action_batch = torch.tensor(tuple(d[1] for d in minibatch)).float()
         reward_batch = torch.tensor(tuple(d[2] for d in minibatch)).float()
 
-        if torch.cuda.is_available():  # put on GPU if CUDA is available
-            state_batch = state_batch.cuda()
-            action_batch = action_batch.cuda()
-            reward_batch = reward_batch.cuda()
+        state_batch = to_device(state_batch)
+        action_batch = to_device(action_batch)
+        reward_batch = to_device(reward_batch)
 
 
         # set y_j to r_j for terminal state, otherwise to r_j + gamma*max(Q)
@@ -271,9 +271,7 @@ class RL:
                         self.config['RL']['wantLSTM'] if 'wantLSTM' in self.config['RL'] else False, \
                         self.config['RL']['batchNorm'] if 'batchNorm' in self.config['RL'] else False)
         print(self.model)
-
-        if torch.cuda.is_available():
-            self.model = self.model.cuda()
+        model = to_device(model)
 
         # make optimizer
         self.optimizer = make_optimizer(self.config['RL']["optimizer_config"], self.model)

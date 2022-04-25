@@ -1,13 +1,21 @@
+# Basic configuration file for running ecg_cnn example using json files.
+# Parameters needed to initialize the model
 model_config:
     model_type: SuperNet                               # class w/ `loss` and `inference` methods
     model_folder: experiments/ecg_cnn/model.py         # file containing class
 
+# Configuration for differential privacy
 dp_config:
     enable_local_dp: false                             # whether to enable user-level DP
 
+# Additional privacy metrics
 privacy_metrics_config:
     apply_metrics: false                               # cache data to compute additional metrics
 
+# Select the Federated optimizer to use (e.g. DGA or FedAvg)
+strategy: DGA
+
+# Determines all the server-side settings for training and evaluation rounds
 server_config:   
     wantRL: false                                      # whether to use RL-based meta-optimizers
     resume_from_checkpoint: false                      # restart from checkpoint if file exists
@@ -22,6 +30,8 @@ server_config:
         step_size: 100
     val_freq: 50                                       # how many iterations between metric eval on val set
     rec_freq: 500                                      # how many iterations between metric eval on test set
+    initial_val: true
+    initial_rec: true
     max_iteration: 2000                                # how many iterations in total
     num_clients_per_iteration: 25                      # how many clients per iteration
     data_config:                                       # where to get val and test data from
@@ -42,6 +52,7 @@ server_config:
     best_model_criterion: loss
     fall_back_to_best_model: false
 
+# Dictates the learning parameters for client-side model updates. Train data is defined inside this config.
 client_config:
     do_profiling: false                                # run profiling and compute runtime metrics
     ignore_subtask: false

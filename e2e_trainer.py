@@ -209,9 +209,9 @@ if __name__ == "__main__":
     init_logging(log_path, loglevel=logging_level)
 
     with open(args.config) as f:
+
         cfg_dict = yaml.safe_load(f)
         config = FLUTEConfig.from_dict(cfg_dict)
-        
         config["data_path"] = data_path
         config["output_path"] = args.outputPath
         config["experiment_name"] = experiment_name

@@ -3,7 +3,10 @@
 from __future__ import annotations
 from dataclasses import dataclass
 from collections.abc import MutableMapping
+from cerberus import Validator
 import os
+
+from utils.utils import print_rank
 
 
 # TODO everywhere: choose reasonable defaults.
@@ -740,178 +743,51 @@ class FLUTEConfig(Config):
     server_config: ServerConfig = None
     client_config: ClientConfig = None
 
-    # TODO: clean up all this validation code.
-    def _check_server_config(config, default_server_conf):
-
-        assert "server_config" in config, "server config setting is missing"
-
-        # Checking parameters for server-side training
-        if "train" in config["server_config"]["data_config"]:
-            if "train_data_server" in config["server_config"]["data_config"]["train"]:
-                assert "server_replay_config" in config["server_config"], "Training dataset is defined on the server but training parameters are not set"
-                assert "optimizer_config" in config["server_config"]["server_replay_config"], "Missing \"optimizer_config\" in server_replay server training config"
-                assert "server_iterations" in config["server_config"]["server_replay_config"], "Missing \"server_iterations\" in server_replay server training config"
-
-        # Setting the default values if missing
-        for key in default_server_conf.keys():
-            if key not in config["server_config"]:
-                config["server_config"][key] = default_server_conf[key]
-
-        server_type = config["server_config"]["type"]
-        if not (server_type == "model_averaging" or \
-                server_type == "optimization" or \
-                server_type == "model_optimization" or \
-                server_type == "cluster_finetuning" or \
-                server_type == "cluster_parallel"):
-            raise ValueError("Invalid server type {} in federated learning config".format(server_type))
-
-        assert "best_model_criterion" in config["server_config"], "Missing \"best_model_criterion\" in server config"
-
-        if server_type == "model_optimization" or server_type == "cluster_finetuning" or server_type == "cluster_parallel":
-            assert "initial_lr_client" in config["server_config"], "Missing \"initial_lr_client\" in server config"
-            assert "lr_decay_factor" in config["server_config"], "Missing \"lr_decay_factor\" in server config"
-            assert "aggregate_median" in config["server_config"], "Missing \"aggregate_median\" in server config"
-
-        if "nbest_task_scheduler" in config["server_config"]:
-            assert "num_tasks" in config["server_config"]["nbest_task_scheduler"], "Define \"num_tasks\" in [\"nbest_task_scheduler\"]"
-            assert "iteration_per_task" in config["server_config"]["nbest_task_scheduler"], "Define \"iteration_per_task\" in [\"nbest_task_scheduler\"]"
-            assert len(config["server_config"]["nbest_task_scheduler"]["num_tasks"]) == len(config["server_config"]["nbest_task_scheduler"]["iteration_per_task"]), \
-                "Length mismatched: {}!={}".format(len(config["server_config"]["nbest_task_scheduler"]["num_tasks"]), len(config["server_config"]["nbest_task_scheduler"]["iteration_per_task"]))
-
-        data_path = config['data_path']
-        if 'vocab_dict' in config["server_config"]["data_config"]["val"]:
-            config["server_config"]["data_config"]["val"]["vocab_dict"] = os.path.join(data_path, config["server_config"]["data_config"]["val"]["vocab_dict"])
-        if 'vocab_dict' in config["server_config"]["data_config"]["test"]:
-            config["server_config"]["data_config"]["test"]["vocab_dict"] = os.path.join(data_path, config["server_config"]["data_config"]["test"]["vocab_dict"])
-        if 'vocab_dict' in config["server_config"]["data_config"]["test"]:
-            config["server_config"]["data_config"]["train"]["vocab_dict"] = os.path.join(data_path, config["server_config"]["data_config"]["train"]["vocab_dict"])
-
-        # BERT specific parameters
-        if 'model_config' in config and 'BERT' in config['model_config']:
-            if 'model_name_or_path' in config['model_config']['BERT']['model']:
-                config['server_config']['data_config']['val']['model_name_or_path'] = config['model_config']['BERT']['model']['model_name_or_path']
-                config['server_config']['data_config']['test']['model_name_or_path'] = config['model_config']['BERT']['model']['model_name_or_path']
-            else:
-                config['server_config']['data_config']['val']['model_name_or_path'] = config['model_config']['BERT']['model']['model_name']
-                config['server_config']['data_config']['test']['model_name_or_path'] = config['model_config']['BERT']['model']['model_name']
-
-            if 'process_line_by_line' in config['model_config']['BERT']['model']:
-                config['server_config']['data_config']['val']['process_line_by_line'] = config['model_config']['BERT']['model']['process_line_by_line']
-                config['server_config']['data_config']['test']['process_line_by_line'] = config['model_config']['BERT']['model']['process_line_by_line']
-
-        if "initial_val" in config['server_config']:
-            config['server_config']['initial_val'] = config['server_config']['initial_val']
-        else:
-            config['server_config']['initial_val'] = False
-
-        if "initial_rec" in config['server_config']:
-            config['server_config']['initial_rec'] = config['server_config']['initial_rec']
-        else:
-            config['server_config']['initial_rec'] = False
-
-        return config
-
-    def _check_client_config(config, default_client_conf):
-
-        assert "client_config" in config, "client config setting is missing"
-
-        # Setting the default values if missing
-        for key in default_client_conf.keys():
-            if key not in config["client_config"]:
-                config["client_config"][key] = default_client_conf[key]
-
-        client_type = config["client_config"]["type"]
-        if not (client_type == "gradient_computation" or client_type == "optimization"):
-            raise ValueError("Invalid client option {} in federated learning config".format(client_type))
-
-        if "ss_config" not in config["client_config"]:
-            config["client_config"]["ss_config"] = None
-
-        if "list_of_train_data" in config["client_config"]["data_config"]["train"] and "train_data" in config["client_config"]["data_config"]["train"]:
-            raise ValueError("\"list_of_train_data\" and \"train_data\" cannot be defined at the same time")
-
-        assert "list_of_train_data" in config["client_config"]["data_config"]["train"] or "train_data" in config["client_config"]["data_config"]["train"], "Define either \"list_of_train_data\" and \"train_data\""
-
-        # Adjust path to vocab_dict
-        data_path = config['data_path']
-        if 'vocab_dict' in config["client_config"]["data_config"]["train"]:
-            config["client_config"]["data_config"]["train"]["vocab_dict"] = os.path.join(data_path, config["client_config"]["data_config"]["train"]["vocab_dict"])
-
-        # BERT specific parameters
-        if 'model_config' in config and 'train' in config['client_config']['data_config'] and 'BERT' in config['model_config']:
-            if 'model_name_or_path' in config['model_config']['BERT']['model']:
-                config['client_config']['data_config']['train']['model_name_or_path'] = config['model_config']['BERT']['model']['model_name_or_path']
-            else:
-                config['client_config']['data_config']['train']['model_name_or_path'] = config['model_config']['BERT']['model']['model_name']
-            if 'process_line_by_line' in config['model_config']['BERT']['model']:
-                config['client_config']['data_config']['train']['process_line_by_line'] = config['model_config']['BERT']['model']['process_line_by_line']
-
-        return config
-
     def validate(config):
 
-        # Create dictionaries w/ parameters
-        default_data_conf = {
-            "input_dim": 300,
-            "batch_size": 40,
-            "loader_type": "text",
-            "prepend_datapath": False,
-            "pin_memory": True,
-            "num_frames": 0,
-            "desired_max_samples": 300,
-            "max_grad_norm": 5.0,        # max_grad_norm for gradient clipping
-            "num_workers": 1,
-            "max_batch_size": 0,         # maximum number of batch size; if 0, no limitation is applied
-            "unsorted_batch": False      # do not sort when making batch; this is inefficient in terms of batch, but could be efficient in terms of accuracy
-        }
+        # Join paths in config file
+        if config["server_config"]["wantRL"]:
+            rl_path = config["server_config"]["RL"]["RL_path"]
+            rl_path = os.path.join(config["output_path"],rl_path) if config["server_config"]["RL"].get("RL_path_global", True) \
+                                                            else os.path.join(config["output_path"], config["experiment_name"],rl_path)
 
-        default_server_conf = {
-            "val_freq": 1,
-            "rec_freq": 8,
-            "max_iteration": 100000000,
-            "type": "optimization",
-            "data_config": default_data_conf,
-            "aggregate_median": None,
-            "best_model_criterion": "loss",
-            "fall_back_to_best_model": False,
-            "num_clients_per_iteration": -1
-        }
-
-        default_client_conf = {
-            "copying_train_jsonls": True,
-            "type": "gradient_computation",
-            "data_config": default_data_conf,
-        }
-    
-        assert "data_path" in config, "data_path is missing from config"
-        assert "experiment_name" in config, "experiment_name is missing from config"
-        assert "output_path" in config, "output_path is missing from config"
-        assert "task" in config["server_config"], "task is missing from server_config"
-        assert "task" in config["client_config"], "task is missing from client_config"
-
-        assert "num_clients" not in config["server_config"]["data_config"], "Remove \"num_clients\" from server data_config since this is a reserved key"
-        assert "num_clients" not in config["client_config"]["data_config"], "Remove \"num_clients\" from client data_config since this is a reserved key"
-
-        # Make sure the pretrained model is found in the correct place
-        if "pretrained_model_path" in config["model_config"]["model_type"]:
-            config["model_config"]["model_type"]["pretrained_model_path"] = os.path.join(config["data_path"], config["model_config"]["model_type"]["pretrained_model_path"])
         if "pretrained_model_path" in config["model_config"]:
             config["model_config"]["pretrained_model_path"] = os.path.join(config["data_path"], config["model_config"]["pretrained_model_path"])
 
-        config._check_server_config(default_server_conf)
-        config._check_client_config(default_client_conf)
-
-        # RL-related options
-        if config["server_config"].get("wantRL", False):
-            if config["server_config"]["RL"].get("RL_path_global", True):
-                config["server_config"]["RL"]["RL_path"] = os.path.join(config["output_path"],
-                                                                        config["server_config"]["RL"]["RL_path"])
-            else:
-                config["server_config"]["RL"]["RL_path"] = os.path.join(config["output_path"], config["experiment_name"],
-                                                                        config["server_config"]["RL"]["RL_path"])
+        for section in ["server_config", "client_config"]:
+            for mode in ['test','val','train']:
+                if mode in config[section]["data_config"] and "vocab_dict" in config[section]["data_config"][mode]:
+                    config[section]["data_config"][mode]["vocab_dict"] = os.path.join(config['data_path'], config[section]["data_config"][mode]["vocab_dict"])
+                
+                # TODO: Remove BERT specific parameters
+                if 'BERT' in config['model_config']:
+                    if mode!= 'train':
+                        config['server_config']['data_config'][mode]['model_name_or_path'] = config['model_config']['BERT']['model']['model_name']
+                        config['server_config']['data_config'][mode]['process_line_by_line'] = config['model_config']['BERT']['model']['process_line_by_line']
+                    else:
+                        config['client_config']['data_config'][mode]['model_name_or_path'] = config['model_config']['BERT']['model']['model_name']
+                        config['client_config']['data_config'][mode]['process_line_by_line'] = config['model_config']['BERT']['model']['process_line_by_line']
+        return config
 
     @staticmethod
     def from_dict(config) -> FLUTEConfig:
+
+        # Validate schema in config file
+        schema = eval(open('./core/schema.py', 'r').read())
+        v = Validator(schema)
+        if not v.validate(config,schema):
+            raise ValueError('Missing {} argumment in config file '.format(v.errors))
+        
+        # Normalize default values
+        original_config = config
+        config = v.normalized(config)
+
+        for section in ['server_config', 'client_config']:
+            for mode in config[section]['data_config'].keys():
+                diff = config[section]['data_config'][mode].keys() - original_config[section]['data_config'][mode].keys()
+                if len(diff) > 0:
+                    print_rank("Assigning default values for: {} in [{}][{}][data_config]".format(diff, section, mode))
+        
         dp_config = \
             PrivacyConfig.from_dict(config['dp_config']) \
             if 'dp_config' in config else None

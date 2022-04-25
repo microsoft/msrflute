@@ -2,7 +2,7 @@
 # Licensed under the MIT license.
 
 import torch
-from utils import print_rank, print_cuda_stats
+from utils import print_rank, print_cuda_stats, to_device
 from importlib.machinery import SourceFileLoader
 
 def make_model(model_config, dataloader_type=None, input_dim=-1, output_dim=-1):
@@ -36,15 +36,7 @@ def make_model(model_config, dataloader_type=None, input_dim=-1, output_dim=-1):
         return ValueError("{} not supported".format(model_config["weight_init"]))
 
     print_rank("trying to move the model to GPU")
-
-    # Move it to GPU if you can
-    if torch.cuda.is_available():        
-        model.cuda()
-        print_rank(f"moved the model to GPU {torch.cuda.current_device()}")
-    else:
-        model.cpu()
-        print_rank("no GPU available.")
-    
+    model = to_device(model)
     print_rank("model: {}".format(model))
     print_cuda_stats()
 

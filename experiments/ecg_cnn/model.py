@@ -167,7 +167,8 @@ class SuperNet(nn.Module):
         n_samples = features.shape[0]
  
         accuracy = torch.mean((torch.argmax(output, dim=1) == labels).float()).item()
-        return output, accuracy, n_samples
+
+        return {'output':output, 'val_acc': accuracy, 'batch_size': n_samples}
 
     def set_eval(self):
         '''Bring the model into evaluation mode'''

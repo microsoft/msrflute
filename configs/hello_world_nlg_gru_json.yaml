@@ -1,5 +1,4 @@
-# Basic configuration file for running locally nlg_gru example using json in Azure ML.
-
+# Basic configuration file for running nlg_gru example using json files.
 # Parameters needed to initialize the model
 model_config: 
     model_type: GRU
@@ -16,7 +15,7 @@ dp_config:
     # enable_local_dp: true     # Local dp clips and adds noise on the client and centrally accumulates the privacy budget
     # eps: 100                  # epsilon
     # max_grad: 0.008           # max gradient
-    # weight_scaler: 0.0001
+    # weight_scaler: 0.0001     # indicates how the aggregation weights scaled before noise addition, and unscaled afterwards.
     # max_weight: 0.0001        # The max_weight and min_weight should be already scaled by weight_scaler
     # min_weight: 0.00009       # Because we scale down the weight using weight_scalar -> clip -> add noise -> scale back up.
 
@@ -34,6 +33,9 @@ privacy_metrics_config:
     #     lr: 0.03
     #     type: adamax
     #     amsgrad: false
+
+# Select the Federated optimizer to use (e.g. DGA or FedAvg)
+strategy: DGA
 
 # Determines all the server-side settings for training and evaluation rounds
 server_config:   
@@ -110,12 +112,13 @@ server_config:
     lr_decay_factor: 1.0
     best_model_criterion: loss                      # Determine the best model based on minimal loss, for checkpointing
     fall_back_to_best_model: false                  # If a model degrades, use the previous best model
-    server_replay_config:                           # This is only applies if the server-side training data is fully configured and loaded
-        server_iterations: 50
-        optimizer_config:
-            type: adam
-            lr: 0.00002
-            amsgrad: true
+    # server_replay_config:                           # This is only applies if the server-side training data is fully configured and loaded
+    #     server_iterations: 50
+    #     optimizer_config:
+    #         type: adam
+    #         lr: 0.00002
+    #         amsgrad: true
+    
 # Dictates the learning parameters for client-side model updates. Train data is defined inside this config.
 client_config:
     meta_learning: basic

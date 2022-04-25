@@ -547,7 +547,7 @@ def reshape_params_to_model(grads, model):
         offset += new_size
     return reshaped_grads
 
-def to_cuda(x):
+def to_device(x):
     return x.cuda() if torch.cuda.is_available() else x
 
 def update_json_log(log_path, status_info):

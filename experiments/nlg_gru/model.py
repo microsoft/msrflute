@@ -4,7 +4,7 @@
 import torch as T
 from torch import Tensor
 from typing import Dict, List, Tuple, Optional, NamedTuple
-from utils import softmax
+from utils import softmax, to_device
 
 class GRU2(T.nn.Module):
     def __init__(self, input_size, hidden_size, input_bias, hidden_bias):
@@ -26,8 +26,7 @@ class GRU2(T.nn.Module):
         return hy
     
     def forward(self, input : Tensor) -> Tuple[Tensor, Tensor]:
-        hiddens : List[Tensor] = [T.zeros((input.shape[0], self.hidden_size)).cuda() if T.cuda.is_available() \
-                                                                            else T.zeros((input.shape[0], self.hidden_size))]
+        hiddens : List[Tensor] = [to_device(T.zeros((input.shape[0], self.hidden_size)))]
         for step in range(input.shape[1]):
             hidden = self._forward_cell(input[:, step], hiddens[-1])
             hiddens.append(hidden)
@@ -71,7 +70,7 @@ class GRU(T.nn.Module): #DLM_2_0
 
     def forward(self, input : T.Tensor) -> Tuple[Tensor, Tensor]:
         input = input['x'] if isinstance(input, dict) else input
-        input = input.cuda() if T.cuda.is_available() else input
+        input = to_device(input)
         embedding = self.embedding(input, True)
         hiddens, state = self.rnn(embedding)
         if self.dropout>0.0:
@@ -82,7 +81,7 @@ class GRU(T.nn.Module): #DLM_2_0
 
     def loss(self, input : T.Tensor) -> T.Tensor:
         input = input['x'] if isinstance(input, dict) else input
-        input = input.cuda() if T.cuda.is_available() else input
+        input = to_device(input)
         non_pad_mask = input >= 0
         input = input * non_pad_mask.long()
         non_pad_mask = non_pad_mask.view(-1)
@@ -100,7 +99,7 @@ class GRU(T.nn.Module): #DLM_2_0
 
     def inference(self, input):
         input = input['x'] if isinstance(input, dict) else input
-        input = input.cuda() if T.cuda.is_available() else input
+        input = to_device(input)
         non_pad_mask = input >= 0
         input = input * non_pad_mask.long()
         non_pad_mask = non_pad_mask.view(-1)

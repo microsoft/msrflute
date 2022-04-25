@@ -12,3 +12,4 @@ azureml-core
 azureml-defaults
 pyyaml
 sklearn
+cerberus

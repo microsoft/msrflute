@@ -11,7 +11,7 @@ import numpy as np
 import torch
 
 from extensions import privacy, RL, quant_model
-from utils import compute_grad_cosines, print_rank, to_cuda
+from utils import compute_grad_cosines, print_rank, to_device
 from core.strategies import BaseStrategy
 from core.strategies.utils import (
     aggregate_gradients_inplace,
@@ -317,9 +317,9 @@ class DGA(BaseStrategy):
             # Model parameters are already multiplied with weight on client, we only have to sum them up
             for p, client_grad in zip(self.worker_trainer.model.parameters(), client_parameters):
                 if p.grad is None:
-                    p.grad = to_cuda(client_grad) * rl_weight / orig_weight
+                    p.grad = to_device(client_grad) * rl_weight / orig_weight
                 else:
-                    p.grad += to_cuda(client_grad) * rl_weight / orig_weight
+                    p.grad += to_device(client_grad) * rl_weight / orig_weight
             weight_sum += rl_weight
 
         # Normalize with weight_sum

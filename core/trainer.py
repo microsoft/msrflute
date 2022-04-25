@@ -20,6 +20,7 @@ from utils import \
     torch_save, \
     try_except_save, \
     write_yaml
+from utils.utils import to_device
 
 
 class TrainerBase:
@@ -364,9 +365,9 @@ class Trainer(TrainerBase):
             else:
                 if apply_privacy_metrics:
                     if "x" in batch:
-                        indices = batch["x"].cuda() if torch.cuda.is_available() else batch["x"]
+                        indices = to_device(batch["x"])
                     elif "input_ids" in batch:
-                        indices = batch["input_ids"].cuda() if torch.cuda.is_available() else batch["input_ids"]
+                        indices = to_device(batch["input_ids"])
                     self.cached_batches.append(indices)
                 loss = self.model.loss(batch)
             loss.backward()

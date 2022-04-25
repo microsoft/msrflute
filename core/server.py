@@ -36,6 +36,7 @@ from utils import (
     get_lr,
     print_rank,
     update_json_log,
+    to_device,
 )
 
 # For profiling
@@ -94,12 +95,7 @@ class OptimizationServer(federated.Server):
         self.evaluation = Evaluation(config, model_path, self.process_testvalidate, val_dataloader, test_dataloader)
 
         # TODO: does this need to be adjusted for custom metrics?
-        self.metrics = {
-            'best_val_loss': float('inf'),
-            'best_val_acc': 0.0,
-            'best_test_loss': float('inf'),
-            'best_test_acc': 0.0
-        }
+        self.metrics = dict()
 
         self.model_backup_freq = server_config.get('model_backup_freq', 100)
         self.worker_trainer_config = server_config.get('trainer_config', {})
@@ -238,7 +234,7 @@ class OptimizationServer(federated.Server):
 
         run.log('Max iterations', self.max_iteration)
         try:
-            self.worker_trainer.model.cuda() if torch.cuda.is_available() else None
+            self.worker_trainer.model = to_device(self.worker_trainer.model)
 
             # Do an initial validation round to understand the pretrained model's validation accuracy
             # Skip if we resumed from a checkpoint (cur_iter_no > 0)
@@ -484,19 +480,20 @@ class OptimizationServer(federated.Server):
                 # Fall back to the best model if the option is enabled
                 self.fall_back_to_prev_best_status()
 
-                # Logging the latest best values
-                update_json_log(
-                    self.log_path,
-                    {
-                        'i': i + 1,
-                        'best_val_loss': float(self.metrics['best_val_loss']),
-                        'best_val_acc': float(self.metrics['best_val_acc']),
-                        'best_test_loss': float(self.metrics['best_test_loss']),
-                        'best_test_acc': float(self.metrics['best_test_acc']),
-                        'weight': float(self.lr_weight),
-                        'num_label_updates': int(self.no_label_updates)
-                    },
-                )
+                # Logging the latest best values only after the 1st val/test round has been executed
+                if len(self.metrics) > 1:
+                    update_json_log(
+                        self.log_path,
+                        {
+                            'i': i + 1,
+                            'best_val_loss': float(self.metrics['best_val_loss']),
+                            'best_val_acc': float(self.metrics['best_val_acc']),
+                            'best_test_loss': float(self.metrics['best_test_loss']),
+                            'best_test_acc': float(self.metrics['best_test_acc']),
+                            'weight': float(self.lr_weight),
+                            'num_label_updates': int(self.no_label_updates)
+                        },
+                    )
 
                 end = time.time()
 
