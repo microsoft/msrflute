@@ -4,9 +4,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from collections.abc import MutableMapping
 from cerberus import Validator
-import os
-
+from importlib.machinery import SourceFileLoader
 from utils.utils import print_rank
+from importlib.machinery import SourceFileLoader
+import os
 
 
 # TODO everywhere: choose reasonable defaults.
@@ -80,7 +81,7 @@ class Config(MutableMapping):
 
 @dataclass
 class ModelConfig(Config):
-    """Model configuration
+    """Base class for Model configurations
 
 The model configuration specifies model architecture, parameters, and initialization settings.
 
@@ -91,42 +92,29 @@ Attributes:
 
     pretrained_model_path (str): The path to the pretrained model.  If None, the model will be randomly initialized using the method defined in weight_init.
 
-    embed_dim (int): specific to GRU models, embedding dimension.
-
-    vocab_size (int): specific to GRU models, the vocabulary size.
-
-    hidden_dim (int): specific to GRU models, the hidden size.
-
-    weight_init (str): ``default``, or ``xavier_normal``, indicating how to randomly initialize the model weights.
-
-    OOV_correct (bool): whether OOV predictions are evaluated as correct, or ignored.
-
-    BERT (BERTConfig): BERT-specific configuration.
-
-ToDo:
-    * remove or sub-class GRU-specific parameters
-    * move OOV_correct to the data configs?
 """
     model_type: str = None
     model_folder: str = None
     pretrained_model_path: str = None
-    embed_dim: int | None = None
-    vocab_size: int | None = None
-    hidden_dim: int | None = None
-    weight_init: str = None
-    OOV_correct: bool = False
-    BERT: BERTConfig = None
 
     @staticmethod
     def from_dict(config) -> ModelConfig:
-        result = ModelConfig()
-        for k in config:
-            if k == 'BERT':
-                result.BERT = BERTConfig.from_dict(config[k])
-            else:
-                setattr(result, k, config[k])
-        return result
-
+        """Searches the model folder for config.py and if it is found the model config 
+        is initialized from the class [model_type]Config"""
+        cfg_path = os.path.dirname("./" + str(config['model_folder'])) + '/config.py'
+        if os.path.exists(cfg_path):
+            loader = SourceFileLoader('config', cfg_path).load_module()
+            config_class = config['model_type'] + 'Config'
+            try:
+                config_type = getattr(loader, config_class)
+                return from_dict(config_type, config)
+            except AttributeError:
+                print_rank(f"Config class {config_class} not found in {cfg_path}")
+                raise
+        else:
+            print_rank(f"Warning: couldn't find {cfg_path}, falling back to dictionary.")
+            return config
+            
 
 @dataclass
 class BERTModelConfig(Config):
