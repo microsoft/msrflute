@@ -1,12 +1,12 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
-
 import torch
 from torch import nn
 from torch.nn import functional as F
 from sklearn.metrics import f1_score
 
+from core.model import BaseModel
 
 class Net(nn.Module):
     '''The standard PyTorch model we want to federate'''
@@ -30,7 +30,7 @@ class Net(nn.Module):
         return x
 
 
-class CNN(nn.Module):
+class CNN(BaseModel):
     '''This is a PyTorch model with some extra methods'''
 
     def __init__(self, model_config):
@@ -54,12 +54,12 @@ class CNN(nn.Module):
         accuracy = torch.mean((torch.argmax(output, dim=1) == labels).float()).item()
         f1 = f1_score(labels.cpu(), torch.argmax(output, dim=1).cpu(), average='micro')
 
-        return {'output':output, 'val_acc': accuracy, 'batch_size': n_samples, 'f1_score':f1}
-        
-    def set_eval(self):
-        '''Bring the model into evaluation mode'''
-        self.eval()
+        # NOTE: Only the keys 'output','acc' and 'batch_size' does not require 
+        # extra fields as 'value' and 'higher is better'. FLUTE requires this 
+        # format only for customized metrics.
 
-    def set_train(self):
-        '''Bring the model into training mode'''
-        self.train()
+        return {'output':output, 'acc': accuracy, 'batch_size': n_samples, \
+                'f1_score': {'value':f1,'higher_is_better': True}} 
+
+
+        

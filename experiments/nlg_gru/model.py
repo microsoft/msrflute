@@ -3,7 +3,9 @@
 
 import torch as T
 from torch import Tensor
-from typing import Dict, List, Tuple, Optional, NamedTuple
+from typing import List, Tuple
+
+from core.model import BaseModel
 from utils import softmax, to_device
 
 class GRU2(T.nn.Module):
@@ -52,7 +54,7 @@ class Embedding(T.nn.Module):
         return output
     
 
-class GRU(T.nn.Module): #DLM_2_0
+class GRU(BaseModel): #DLM_2_0
     def __init__(self, model_config, OOV_correct=False, dropout=0.0, topK_results=1, wantLogits=False, **kwargs):
         super(GRU, self).__init__()
         self.vocab_size = model_config['vocab_size']
@@ -128,17 +130,7 @@ class GRU(T.nn.Module): #DLM_2_0
                               'predictions': preds_topK.cpu().detach().numpy(),
                               'labels': targets.cpu().detach().numpy()}
 
-        return {'output':output, 'val_acc': acc.item(), 'batch_size': input.shape[0]}
-
-    def set_eval(self):
-        """
-        Bring the model into evaluation mode
-        """
-        self.eval()
+        return {'output':output, 'acc': acc.item(), 'batch_size': input.shape[0]}
 
 
-    def set_train(self):
-        """
-        Bring the model into train mode
-        """
-        self.train()
+

@@ -9,6 +9,8 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
+from core.model import BaseModel
+
 # ReLu alternative 
 class Swish(nn.Module):
     def forward(self, x):
@@ -148,7 +150,7 @@ class Net(nn.Module):
         x = F.softmax(self.fc(x), dim=-1)
         return x
 
-class SuperNet(nn.Module):
+class SuperNet(BaseModel):
     '''This is the parent of the net with some extra methods'''
     def __init__(self, model_config):
         super().__init__()
@@ -168,15 +170,9 @@ class SuperNet(nn.Module):
  
         accuracy = torch.mean((torch.argmax(output, dim=1) == labels).float()).item()
 
-        return {'output':output, 'val_acc': accuracy, 'batch_size': n_samples}
+        return {'output':output, 'acc': accuracy, 'batch_size': n_samples}
+        
 
-    def set_eval(self):
-        '''Bring the model into evaluation mode'''
-        self.eval()
-
-    def set_train(self):
-        '''Bring the model into training mode'''
-        self.train()
 
 
 

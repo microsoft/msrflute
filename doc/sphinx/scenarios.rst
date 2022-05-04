@@ -43,19 +43,19 @@ If labels are needed by the task, ``user_data_label`` will be required by FLUTE 
 Add the model to FLUTE
 --------------
 
-FLUTE requires the model declaration framed in PyTorch, with the following functions:
+FLUTE requires the model declaration framed in PyTorch, which must inhereit from the `BaseModel` class defined in `core/model.py`. The following methods should be overridden:
 
     * __init__: model definition
     * loss: computes the loss used for training rounds
     * inference: computes the metrics used during evaluation rounds
-    * set_eval: brings the model into evaluation mode
-    * set_train: brings the model into training mode
 
 Please see the example provided below:
 
 .. code:: python
 
-    class CNN(nn.Module):
+    from core.model import BaseModel
+
+    class CNN(BaseModel):
     '''This is a PyTorch model with some extra methods'''
 
     def __init__(self, model_config):
@@ -79,41 +79,53 @@ Please see the example provided below:
         accuracy = torch.mean((torch.argmax(output, dim=1) == labels).float()).item()
         f1 = f1_score(labels.cpu(), torch.argmax(output, dim=1).cpu(), average='micro')
 
-        return {'output':output, 'val_acc': accuracy, 'batch_size': n_samples, 'f1_score':f1}
-        
-    def set_eval(self):
-        '''Bring the model into evaluation mode'''
-        self.eval()
+        # NOTE: Only the keys 'output','acc' and 'batch_size' does not require 
+        # extra fields as 'value' and 'higher is better'. FLUTE requires this 
+        # format only for customized metrics.
 
-    def set_train(self):
-        '''Bring the model into training mode'''
-        self.train()
+        return {'output':output, 'acc': accuracy, 'batch_size': n_samples, \
+                'f1_score': {'value':f1,'higher_is_better': True}} 
 
-The Inference function must return a dictionary with the metrics that will be computed, as follows:
-
-    .. code:: bash
-        
-        { "output": loss, "val_acc": accuracy, "batch_size": batch_size}
-
-.. note:: FLUTE requires at least loss, accuracy and batch size for the dictionary returned by inference(). More metrics can be added just by includding a new key in the same dictionary.
-
-Once the model is ready, all mandatory files must be in a single folder inside /experiments. Please adjust your files with the following naming structure so FLUTE can be able to find all the scripts needed.
+Once the model is ready, all mandatory files must be in a single folder inside ´{/experiments´. Please adjust your files with the following naming structure so FLUTE can be able to find all the scripts needed.
 
 .. code-block:: bash
 
     task_name
         |---- dataloaders
               |---- text_dataloader.py
+              |---- text_dataset.py
         |---- utils
-              |---- utils.py
+              |---- utils.py (if needed)
         |---- model.py
         |---- config.yaml
-        |---- custom_metrics.py (optional)
         |---- README.txt
 
 .. note:: In case you need to import a module that has not been considered in FLUTE, this can be added in requirements.txt 
 
 .. note:: All files must contain only absolute imports, in order to avoid issues when running.
+
+Implement new metrics
+--------------
+
+The metrics computed during the evaluation rounds are declared inside `inference()` in the model declaration. FLUTE requires this function to return a dictionary with at least `output`, `acc` and `batch_size` as follows:
+
+    .. code:: bash
+        
+        { "output": loss, "acc": accuracy, "batch_size": batch_size}
+
+In order to add a new metric, we just need to add the key inside the same dictionary with the following format:
+
+    .. code:: bash
+        
+        { "output": loss, 
+          "acc": accuracy, 
+          "batch_size": batch_size, 
+          "custom_metric_1": {"value": value1 ,'higher_is_better': True},
+          "custom_metric_2": {"value": value2 ,'higher_is_better': False}}
+
+Once the keys have been included in the returning dictionary from `inference()`, FLUTE will automatically recognize them during the test/val rounds.
+
+.. note:: Only the keys `output`, `acc` and `batch_size` does not require a dictionary. 
 
 Create the configuration file
 ---------------------------------

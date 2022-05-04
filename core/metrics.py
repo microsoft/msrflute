@@ -4,42 +4,31 @@
 In this file we define the wrapper class for 
 implementing metrics.
 '''
-from abc import ABC
 import logging
-from unittest import result
 
 import numpy as np
 import torch
-import torch.nn as nn
 
 from utils import print_rank
 
-class Metrics(ABC):
+class Metrics():
 
     def __init__(self):
         super().__init__()
 
     def compute_metrics(self,dataloader, model):
-        '''This function is called by ´run_validation_generic´ function 
+        '''This method is called by ´run_validation_generic´ function 
         inside trainer.py .
         
-        This is just a helper function that computes loss and accuracy  
-        metrics that will be used for all experiments. This function will
-        concatenate and return the basic_metrics dict + customized_metrics 
-        dict.
+        This is just a helper function that computes the metrics returned 
+        in the inference function inside ´model.py´.
         '''
-
         print_rank("Computing metrics")
-        output_to, metrics, inf_results = self.basic_metrics(dataloader,model)
-        try:
-            metrics.update(self.customized_metrics(inf_results=inf_results))
-        except:
-            print_rank("File custom_metrics.py not found")
-        
-        return output_to, metrics
+        return self.call_inference(dataloader,model)
 
-    def basic_metrics(self, dataloader, model):
-        val_losses, val_accuracies = list(), list()
+    def call_inference(self, dataloader, model):
+        
+        metrics, sum_metrics = dict(), dict()
         output_tot = {"probabilities": [], "predictions": [], "labels":[]}
         counter = 0
 
@@ -47,17 +36,22 @@ class Metrics(ABC):
             for _, batch in enumerate(dataloader):
                 val_loss = model.loss(batch).item()
                 inf_results = model.inference(batch)
-                output = inf_results['output']
-                val_acc = inf_results['val_acc']
-                batch_size = inf_results['batch_size']
+                inf_results ['loss'] = {'value': val_loss,'higher_is_better': False}
+                output = inf_results.pop('output')
+                batch_size = inf_results.pop('batch_size')
+
+                for key in inf_results.keys():
+                    if not isinstance(inf_results[key], dict):
+                        inf_results[key] = {'value':inf_results[key],'higher_is_better': True}
+                    sum_metrics[key] = [] if not key in sum_metrics else sum_metrics[key]
 
                 if isinstance(output, dict):
                     output_tot["probabilities"].append(output["probabilities"])
                     output_tot["predictions"].append(output["predictions"])
                     output_tot["labels"].append(output["labels"])
 
-                val_losses.append(val_loss * batch_size)
-                val_accuracies.append(val_acc * batch_size)
+                for q in inf_results.keys():
+                    sum_metrics[q].append(inf_results[q]['value']* batch_size)
                 counter += batch_size
 
         output_tot["probabilities"] = np.concatenate(output_tot["probabilities"]) if output_tot["probabilities"] else []
@@ -67,15 +61,11 @@ class Metrics(ABC):
         # Post-processing of metrics
         print_rank(f"validation complete {counter}", loglevel=logging.DEBUG)
         model.set_train()
-        avg_val_loss = sum(val_losses) / counter
-        avg_val_acc = sum(val_accuracies) / counter
+
+        for k in inf_results.keys():
+            metrics[k] = inf_results[k]
+            metrics[k]['value'] = sum(sum_metrics[k])/counter
+
         print_rank(f"validation examples {counter}", loglevel=logging.DEBUG)
-
-        # Create metrics dict
-        metrics = {'loss': {'value':avg_val_loss,'higher_is_better': False},
-                    'acc': {'value':avg_val_acc,'higher_is_better': True}}
                     
-        return output_tot, metrics, inf_results
-
-    def customized_metrics(self, inf_results):
-        pass
+        return output_tot, metrics

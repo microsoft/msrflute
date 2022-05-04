@@ -467,15 +467,8 @@ def run_validation_generic(model, val_dataloader):
         loglevel=logging.DEBUG
     )
 
-    try:
-        from core.globals import task
-        loader = SourceFileLoader("CustomMetrics", str("./experiments/"+task+"/custom_metrics.py")).load_module()
-        metrics_cl = getattr(loader,"CustomMetrics")()
-        print_rank("Loading customized metrics")
-    except:
-        metrics_cl = Metrics()
-        print_rank("Loading default metrics")
-
+    print_rank("Loading metrics ...")
+    metrics_cl = Metrics()
     return metrics_cl.compute_metrics(dataloader=val_loader, model=model)
 
 def set_component_wise_lr(model, optimizer_config, updatable_names):

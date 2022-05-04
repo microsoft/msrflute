@@ -31,11 +31,12 @@ from transformers import (
                     set_seed,
 )
 from utils.utils import to_device
+from core.model import BaseModel
 
 MODEL_CONFIG_CLASSES = list(MODEL_FOR_MASKED_LM_MAPPING.keys())
 MODEL_TYPES = tuple(conf.model_type for conf in MODEL_CONFIG_CLASSES)
 
-class BERT(T.nn.Module):
+class BERT(BaseModel):
     def __init__(self, model_config, **kwargs):
         super(BERT, self).__init__()
         """
@@ -274,7 +275,7 @@ class BERT(T.nn.Module):
                                             description="Evaluation",
                                             ignore_keys=ignore_keys,
                                             metric_key_prefix=metric_key_prefix)
-        return {'output':output['eval_loss'], 'val_acc': output['eval_acc'], 'batch_size': batch_size[0]}
+        return {'output':output['eval_loss'], 'acc': output['eval_acc'], 'batch_size': batch_size[0]}
 
 
 
