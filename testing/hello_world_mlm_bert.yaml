@@ -1,0 +1,143 @@
+# Basic configuration file for running mlm_bert example using json files.
+# Parameters needed to initialize the model
+model_config:
+    model_type: BERT 
+    model_folder: experiments/mlm_bert/model.py
+    BERT:
+        loader_type: text
+        model:
+            model_name: roberta-large
+            cache_dir: ./cache_dir
+            use_fast_tokenizer: False
+            mask_token: <mask>
+            task: mlm
+            past_index: -1
+            prediction_loss_only: false
+            process_line_by_line: false
+        training:
+            seed: 12345
+            label_smoothing_factor: 0  
+            batch_size: 64
+            max_seq_length: 256            
+
+# Configuration for differential privacy
+dp_config:
+    enable_local_dp: false  # If enabled, the rest of parameters is needed. 
+    enable_global_dp: false # Local dp clips and adds noise on the client and centrally accumulates the privacy budget
+    eps: 100                # epsilon
+    global_sigma: 0.35      # Used when global dp es enabled, specifies the global Gaussian noise
+    weight_scaler: 0.0001   # indicates how the aggregation weights scaled before noise addition, and unscaled afterwards.
+    max_grad: 0.008         # max gradient
+    max_weight: 0.5         # The max_weight and min_weight should be already scaled by weight_scaler
+    min_weight: 0.0000001   # Because we scale down the weight using weight_scalar -> clip -> add noise -> scale back up.
+
+# Additional privacy metrics
+privacy_metrics_config:
+    apply_metrics: false    # If enabled, the rest of parameters is needed. 
+
+# Select the Federated optimizer to use (e.g. DGA or FedAvg)
+strategy: DGA
+
+# Determines all the server-side settings for training and evaluation rounds
+server_config:
+    resume_from_checkpoint: true                    # Resumes from latest checkpoint iteration if available 
+    do_profiling: false                             # Capture profiling information during server updates.
+    wantRL: false                                   # Enable/Disable Reinforcement learning
+    optimizer_config:                               # Configuration for server-side optimizer
+        lr: 0.00001                                 
+        weight_decay: 0.01
+        type: adamW
+    annealing_config:                               # This section configures how the learning rate decays
+        type: step_lr
+        step_interval: epoch
+        gamma: 1.0
+        step_size: 1000
+    val_freq: 5                                     # Frequency for validation rounds
+    rec_freq: 5                                    # Frequency for testing rounds
+    initial_val : false                              # Enable initial validation round at itr=0
+    initial_rec: false                              # Enable initial testing round at itr=0
+    max_iteration: 2                            # Total number of rounds for FL
+    num_clients_per_iteration: 2                  # Number of clients sampled per round
+    data_config:                                    # Server-side data configuration
+        val:                                        # Validation data
+            loader_type: text
+            val_data: data/mlm_bert/val_data.txt
+            task: mlm
+            mlm_probability: 0.25
+            tokenizer_type_fast: False
+            batch_size: 128
+            max_seq_length: 256
+            min_words_per_utt: 5
+            max_samples_per_user: 5000
+            mask_token: <mask>
+            num_workers: 0
+            prepend_datapath: false
+            cache_dir: ./cache_dir
+        # Note this is NOT the main training data configuration, which is configured in the 
+        # client config.  This section is ignored unless you are running replay data.
+        # If you want to run replay data- set a path name for train_data_server.
+        # train:
+        #     loader_type: text
+        #     train_data: null
+        #     train_data_server: null
+        #     desired_max_samples: null
+        test:                                       # Test data configuration
+            loader_type: text
+            test_data: data/mlm_bert/test_data.txt
+            task: mlm
+            mlm_probability: 0.25
+            tokenizer_type_fast: False
+            batch_size: 128
+            max_seq_length: 256
+            max_samples_per_user: 5000
+            mask_token: <mask>
+            num_workers: 0
+            prepend_datapath: false
+            cache_dir: ./cache_dir
+    type: model_optimization                        # Server type
+    aggregate_median: softmax                       # FL aggregation method
+    weight_train_loss: train_loss                # Determines how each client's weight is computed (e.g. grad_mean_loss, train_loss)
+    softmax_beta: 1.00                              
+    initial_lr_client: 0.00001
+    lr_decay_factor: 1.0
+    best_model_criterion: loss                      # Determine the best model based on minimal loss, for checkpointing
+    fall_back_to_best_model: false                  # If a model degrades, use the previous best model
+
+# Dictates the learning parameters for client-side model updates. Train data is defined inside this config.
+client_config:
+    meta_learning: basic
+    stats_on_smooth_grad: true
+    ignore_subtask: false
+    copying_train_data: false
+    do_profiling: false                             # Enables client-side training profiling
+    data_config:
+        train:                                      # This is the main training data configuration
+            loader_type: text
+            list_of_train_data: data/mlm_bert/train_data.txt
+            task: mlm
+            mlm_probability: 0.25
+            tokenizer_type_fast: False
+            batch_size: 24
+            max_seq_length: 256
+            min_words_per_utt: 5
+            desired_max_samples: 5000
+            mask_token: <mask>
+            num_workers: 0
+            num_frames: 0
+            max_grad_norm: 15.0
+            prepend_datapath: false
+            cache_dir: ./cache_dir
+            pin_memory: true
+    type: optimization
+    meta_optimizer_config:
+        lr: 0.01
+        type: adam
+    optimizer_config:
+        type: adamW
+        weight_decay: 0.01
+        amsgrad: true
+    annealing_config:
+        type: step_lr
+        step_interval: epoch
+        step_size: 2
+        gamma: 1.0

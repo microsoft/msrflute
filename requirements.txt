@@ -13,3 +13,4 @@ azureml-defaults
 pyyaml
 sklearn
 cerberus
+googledrivedownloader

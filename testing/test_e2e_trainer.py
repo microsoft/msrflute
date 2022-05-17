@@ -2,58 +2,76 @@
 # Licensed under the MIT license.
 
 import subprocess
-import os.path
 import os
 import platform
+import pytest 
 
-launcher_path='e2e_trainer.py'
-data_path=r'./testing/mockup/'
-output_path=r'./testing/outputs'
-output_folder='./testing/outputs'
-config_path=r'./testing/configs/hello_world_local.yaml'
+xfail = pytest.mark.xfail
 
+def get_info(task):
 
-def test_e2e_trainer():  
+    data_path=r'./testing/'
+    output_path=r'./testing/outputs/'
 
-    try:
-        #Verify complete script execution
-        os.system("mkdir -p "+ output_folder)
+    if task == 'nlg_gru':
+        config_path=r'./testing/hello_world_nlg_gru.yaml'
+    elif task == "classif_cnn":
+        config_path=r'./testing/hello_world_classif_cnn.yaml'
+    elif task == "ecg_cnn":
+        config_path=r'./testing/hello_world_ecg_cnn.yaml'
+    elif task == "mlm_bert":
+        config_path=r'./testing/hello_world_mlm_bert.yaml'
 
-        command = ['mpiexec', '-np', '2', 'python', launcher_path,\
-                '-dataPath',data_path,'-outputPath',output_path,'-config',config_path,\
-                '-task','nlg_gru']
+    return data_path, output_path, config_path
+
+def run_pipeline(data_path, output_path, config_path, task):
+
+    print("Testing {} task".format(task))
+
+    # Adjust command to the task and OS
+    sym = "&" if platform.system() == "Windows" else ";" 
+    command = 'cd .. '+ sym +' mpiexec '+'-np '+'2 '+ 'python '+ 'e2e_trainer.py '+ \
+            '-dataPath '+ data_path+' -outputPath '+output_path+' -config ' +config_path +\
+            ' -task '+ task
+
+    # Execute e2e_trainer + stores the exit code
+    with open('logs.txt','w') as f:                      
+        process= subprocess.run(command, shell=True,stdout=f,text=True,timeout=2000)
+    return_code=process.returncode
+    
+    # Print logs
+    os.system("ls")
+    os.system("less logs.txt")
+    print(process.stderr)
+    print("Finished running {} task".format(task))
+
+    return return_code
+
+def test_nlg_gru():  
+    
+    task = 'nlg_gru'
+    data_path, output_path, config_path = get_info(task)
+    assert run_pipeline(data_path, output_path, config_path, task)==0
+
+@pytest.mark.xfail
+def test_mlm_bert():  
+    
+    task = 'mlm_bert'
+    data_path, output_path, config_path = get_info(task)
+    assert run_pipeline(data_path, output_path, config_path, task)==0
+    print("PASSED")
+    
+def test_classif_cnn():  
+    
+    task = 'classif_cnn'
+    data_path, output_path, config_path = get_info(task)
+    assert run_pipeline(data_path, output_path, config_path, task)==0
+
+def test_ecg_cnn():  
+    
+    task = 'ecg_cnn'
+    data_path, output_path, config_path = get_info(task)
+    assert run_pipeline(data_path, output_path, config_path, task)==0
         
-        command_string = ""
-        for elem in command:
-            command_string = " ".join([command_string, str(elem)])
-        
-        if platform.system() == "Windows":
-            command_string = "cd .. &" + command_string
-        else:
-            command_string = "cd .. ;" + command_string # For Linux users
 
-        with open('logs.txt','w') as f:                      
-            process= subprocess.run(command_string, shell=True,stdout=f,text=True,timeout=420)
-            
-        return_code=process.returncode
-        print(process.stderr)
-        assert return_code==0
-
-        #Verify output files
-        directory=len(os.listdir('./outputs'))
-        assert directory > 0
-
-        #Verify logs for config file
-        config_exists=False
-        config_file='Copy created'
-        logs=open('logs.txt','r')
-        readLogs=logs.read()
-        if config_file in readLogs: 
-            config_exists=True
-        assert config_exists
-
-
-    except Exception as e:
-        print("Encountered an exception: {}".format(e))
-        raise e
     

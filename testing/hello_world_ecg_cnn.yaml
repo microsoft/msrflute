@@ -1,0 +1,69 @@
+# Basic configuration file for running ecg_cnn example using json files.
+# Parameters needed to initialize the model
+model_config:
+    model_type: SuperNet                               # class w/ `loss` and `inference` methods
+    model_folder: experiments/ecg_cnn/model.py         # file containing class
+
+# Configuration for differential privacy
+dp_config:
+    enable_local_dp: false                             # whether to enable user-level DP
+
+# Additional privacy metrics
+privacy_metrics_config:
+    apply_metrics: false                               # cache data to compute additional metrics
+
+# Select the Federated optimizer to use (e.g. DGA or FedAvg)
+strategy: DGA
+
+# Determines all the server-side settings for training and evaluation rounds
+server_config:   
+    wantRL: false                                      # whether to use RL-based meta-optimizers
+    resume_from_checkpoint: false                      # restart from checkpoint if file exists
+    do_profiling: false                                # run profiler and compute runtime metrics
+    optimizer_config:                                  # this is the optimizer used to update the model
+        type: sgd
+        lr: 1.0
+    annealing_config:                                  # annealer for the learning rate
+        type: step_lr
+        step_interval: epoch
+        gamma: 1.0
+        step_size: 100
+    val_freq: 5                                      # how many iterations between metric eval on val set
+    rec_freq: 3                                      # how many iterations between metric eval on test set
+    initial_val: false
+    initial_rec: false
+    max_iteration: 3                               # how many iterations in total
+    num_clients_per_iteration: 3                      # how many clients per iteration
+    data_config:                                       # where to get val and test data from
+        val:
+            batch_size: 10000
+            loader_type: text
+            val_data: data/ecg_cnn/test_data.hdf5
+        test:
+            batch_size: 10000
+            loader_type: text
+            test_data: data/ecg_cnn/test_data.hdf5
+    type: model_optimization
+    aggregate_median: softmax                          # how aggregations weights are computed
+    softmax_beta: 20.0
+    initial_lr_client: 0.001                           # learning rate used on client optimizer
+    lr_decay_factor: 1.0
+    weight_train_loss: train_loss
+    best_model_criterion: loss
+    fall_back_to_best_model: false
+
+# Dictates the learning parameters for client-side model updates. Train data is defined inside this config.
+client_config:
+    do_profiling: false                                # run profiling and compute runtime metrics
+    ignore_subtask: false
+    data_config:                                       # where to get training data from
+        train:
+            batch_size: 96
+            loader_type: text
+            list_of_train_data: data/ecg_cnn/train_data.hdf5
+            desired_max_samples: 87000
+    optimizer_config:                                  # this is the optimizer used by the client
+        type: sgd 
+        lr: 0.001                                      # this is overridden by `initial_lr_client`
+        momentum: 0.90
+    type: optimization

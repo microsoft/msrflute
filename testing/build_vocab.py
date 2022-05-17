@@ -55,7 +55,7 @@ def load_leaf_data(file_path):
 
 def save_vocab(vocab, target_dir):
     os.makedirs(target_dir, exist_ok=True)
-    with open('./mockup/models/vocab_reddit.vocab', 'w') as outV:
+    with open('./models/vocab_reddit.vocab', 'w') as outV:
         outV.write('<OOV>\n')
         for t in vocab['vocab'].keys():
             outV.write(t+'\n')
@@ -103,7 +103,6 @@ def parse_args():
         required=False)
 
     return parser.parse_args()
-
 
 if __name__ == '__main__':
     main()

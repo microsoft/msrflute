@@ -1,0 +1,112 @@
+# Basic configuration file for running nlg_gru example using json files.
+# Parameters needed to initialize the model
+model_config: 
+    model_type: GRU
+    model_folder: experiments/nlg_gru/model.py
+    embed_dim: 160
+    vocab_size: 10000
+    hidden_dim: 512
+    OOV_correct: false
+
+# Configuration for differential privacy
+dp_config:
+    enable_local_dp: false      # If enabled, the rest of parameters is needed. 
+
+# Additional privacy metrics
+privacy_metrics_config:
+    apply_metrics: false             # If enabled, the rest of parameters is needed. 
+
+# Select the Federated optimizer to use (e.g. DGA or FedAvg)
+strategy: DGA
+
+# Determines all the server-side settings for training and evaluation rounds
+server_config:   
+    wantRL: false                   # Enable/Disable Reinforcement learning
+    resume_from_checkpoint: true    # Resumes from latest checkpoint iteration if available 
+    do_profiling: false             # Capture profiling information during server updates.
+    optimizer_config:               # Configuration for server-side optimizer
+        type: adam
+        lr: 0.003
+        amsgrad: true
+    annealing_config:               # This section configures how the learning rate decays
+        type: step_lr
+        step_interval: epoch
+        gamma: 1.0
+        step_size: 100
+    val_freq: 1                     # Frequency for validation rounds
+    rec_freq: 5                     # Frequency for testing rounds
+    initial_val : true            # Enable initial validation round at itr=0
+    initial_rec: false             # Enable initial testing round at itr=0
+    max_iteration: 3               # Total number of rounds for FL
+    num_clients_per_iteration: 10   # Number of clients sampled per round
+    data_config:                    # Server-side data configuration
+        val:                        # Validation data
+            # batch_size: 2048
+            # loader_type: text
+            tokenizer_type: not_applicable
+            prepend_datapath: false
+            val_data: data/nlg_gru/val_data.json
+            vocab_dict: models/vocab_reddit.vocab
+            pin_memory: true
+            num_workers: 0                          # Indicates how many workers are used for creating batches
+            num_frames: 2400                        
+            max_batch_size: 2048
+            max_num_words:  25
+            unsorted_batch: true
+        test:                                       # Test data configuration
+            batch_size: 2048
+            loader_type: text
+            tokenizer_type: not_applicable
+            prepend_datapath: false
+            train_data: null
+            train_data_server: null
+            test_data: data/nlg_gru/test_data.json
+            vocab_dict: models/vocab_reddit.vocab
+            pin_memory: true
+            num_workers: 0                          # Indicates how many workers are used for creating batches
+            max_batch_size: 2048
+            max_num_words:  25
+            unsorted_batch: true
+    type: model_optimization
+    aggregate_median: softmax                       # FL aggregation method
+    weight_train_loss: train_loss                   # Determines how each client's weight is computed (e.g. grad_mean_loss, train_loss)
+    softmax_beta: 20.0
+    initial_lr_client: 1.0
+    lr_decay_factor: 1.0
+    best_model_criterion: loss                      # Determine the best model based on minimal loss, for checkpointing
+    fall_back_to_best_model: false                  # If a model degrades, use the previous best model
+
+# Dictates the learning parameters for client-side model updates. Train data is defined inside this config.
+client_config:
+    meta_learning: basic
+    stats_on_smooth_grad: true
+    ignore_subtask: false
+    num_skips_threshold: 10
+    copying_train_data: false
+    do_profiling: false                                 # Enables client-side training profiling
+    data_config:
+        train:                                          # This is the main training data configuration
+            batch_size: 64
+            loader_type: text
+            tokenizer_type: not_applicable
+            prepend_datapath: false
+            list_of_train_data: data/nlg_gru/train_data.json
+            vocab_dict: models/vocab_reddit.vocab
+            pin_memory: true
+            num_workers: 0
+            desired_max_samples: 50000
+            max_grad_norm: 20.0
+            max_batch_size: 128
+            max_num_words:  25
+            unsorted_batch: true
+    type: optimization
+    meta_optimizer_config:
+        lr: 1.0
+        type: sgd
+    optimizer_config:
+        type: sgd
+    annealing_config:
+        type: step_lr
+        step_interval: epoch
+        step_size: 1
+        gamma: 1.0
