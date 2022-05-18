@@ -17,7 +17,7 @@
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="Data Preparation" href="dataprep.html" />
+    <link rel="next" title="Adding New Scenarios" href="scenarios.html" />
     <link rel="prev" title="Welcome to FLUTE documentation!" href="index.html" /> 
 </head>
 
@@ -42,8 +42,8 @@
 <li class="toctree-l2"><a class="reference internal" href="#architecture">Architecture</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="dataprep.html">Data Preparation</a></li>
 <li class="toctree-l1"><a class="reference internal" href="scenarios.html">Adding New Scenarios</a></li>
+<li class="toctree-l1"><a class="reference internal" href="launch.html">Launch FLUTE</a></li>
 <li class="toctree-l1"><a class="reference internal" href="advanced.html">Advanced Topics</a></li>
 <li class="toctree-l1"><a class="reference internal" href="reference.html">Option Reference</a></li>
 <li class="toctree-l1"><a class="reference internal" href="class_reference.html">Class Reference</a></li>
@@ -75,9 +75,35 @@
              
   <section id="flute-overview">
 <h1>FLUTE Overview<a class="headerlink" href="#flute-overview" title="Permalink to this headline">¶</a></h1>
-<p>FLUTE uses a distributed processing architecture backed by OpenMPI.  An FLUTE job consists of one or more nodes (physical or virtual machines) executing a total of K workers (independent OS-level processes).</p>
-<p>Worker 0 acts as a central orchestrator, maintaining and distributing a central model to workers, and subsequently distributing client tasks to the workers.</p>
+<p>FLUTE is a high-performance open source platform that enables researchers and developers to perform rapid prototyping and offline simulations of novel federated learning algorithms at scale.</p>
+<p>An FLUTE job consists of one or more nodes (physical or virtual machines) executing a total of K workers that can become a Server or Client.</p>
+<figure class="align-center" id="id1">
+<a class="reference internal image-reference" href="_images/concepts-visio.png"><img alt="_images/concepts-visio.png" src="_images/concepts-visio.png" style="width: 400px;" /></a>
+<figcaption>
+<p><span class="caption-text">Independent nodes can execute up to K workers (independent OS-level processes).</span><a class="headerlink" href="#id1" title="Permalink to this image">¶</a></p>
+</figcaption>
+</figure>
+<p>Worker 0 acts as a central orchestrator, maintaining and distributing the central model to workers, and subsequently distributing client tasks to them. On each training round the orchestrator takes care of:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>Dispatch the central model to the rest of the workers</p></li>
+<li><p>Queues up client tasks for workers to execute.</p></li>
+</ul>
+</div></blockquote>
+<p>Workers receive client tasks (client training data and training config) and:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>Execute SGD on the central model using their client’s training data</p></li>
+<li><p>Send model delta (pseudo-gradient) back to the orchestrator.</p></li>
+</ul>
+</div></blockquote>
 <p>Each worker&gt;0 processes client tasks sequentially, consisting of data encoding and one or more batch updates to the central model (note the central model is reset to its original state for each client task). As each client task completes, the model delta, aka the pseudo-gradient is sent back to the orchestrator for federation into a new central model.</p>
+<figure class="align-center" id="id2">
+<a class="reference internal image-reference" href="_images/client-server-visio.png"><img alt="_images/client-server-visio.png" src="_images/client-server-visio.png" style="width: 500px;" /></a>
+<figcaption>
+<p><span class="caption-text">FLUTE uses a distributed processing architecture backed by OpenMPI.</span><a class="headerlink" href="#id2" title="Permalink to this image">¶</a></p>
+</figcaption>
+</figure>
 <p>Execution runs for up to N training rounds.  In each round the orchestrator may sample a subset of clients, and may also randomly delay pseudo-gradient updates from some clients to future rounds. The orchestrator will also periodically distribute evaluation tasks to determine model quality on validation and test data.</p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
@@ -89,18 +115,25 @@
 </div>
 <section id="architecture">
 <h2>Architecture<a class="headerlink" href="#architecture" title="Permalink to this headline">¶</a></h2>
-<figure class="align-default" id="id1">
-<a class="reference internal image-reference" href="_images/concepts.png"><img alt="_images/concepts.png" src="_images/concepts.png" style="width: 400px;" /></a>
+<p>FLUTE design is based on a central server architecture.</p>
+<figure class="align-center" id="id3">
+<a class="reference internal image-reference" href="_images/architecture.png"><img alt="_images/architecture.png" src="_images/architecture.png" style="width: 500px;" /></a>
 <figcaption>
-<p><span class="caption-text">An FLUTE job consists of one or more independent nodes (multi-GPU VMs) executing up to K workers.</span><a class="headerlink" href="#id1" title="Permalink to this image">¶</a></p>
+<p><span class="caption-text">FLUTE logical workflow.</span><a class="headerlink" href="#id3" title="Permalink to this image">¶</a></p>
 </figcaption>
 </figure>
-<figure class="align-default" id="id2">
-<a class="reference internal image-reference" href="_images/client-server.png"><img alt="_images/client-server.png" src="_images/client-server.png" style="width: 600px;" /></a>
-<figcaption>
-<p><span class="caption-text">On each training round the orchestrator (Worker 0) dispatches the central model to the rest of the workers, and then queues up client tasks for workers to execute. Workers receive client tasks (client training data and training config) and execute SGD on the central model using their client’s training data, sending the model delta (pseudo-gradient) back to the orchestrator.</span><a class="headerlink" href="#id2" title="Permalink to this image">¶</a></p>
-</figcaption>
-</figure>
+<p>The logical workflow performed is:</p>
+<blockquote>
+<div><ol class="arabic simple">
+<li><p>Send and initial global model to clients.</p></li>
+<li><p>Train instances of the global model with locally available data on each client.</p></li>
+<li><p>Send training information to the Server (e.g. adapted models, logits, pseudo-gradients).</p></li>
+<li><p>Combine the returned information on the server to produce a new model.</p></li>
+<li><p>Optionally, update the logbal model with an additional server-side rehearsal step.</p></li>
+<li><p>Send the updated global model back to the clients.</p></li>
+<li><p>Repeat steps 2-6 after sampling a new subset of clients for the next training interation.</p></li>
+</ol>
+</div></blockquote>
 </section>
 </section>
 
@@ -109,7 +142,7 @@
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
         <a href="index.html" class="btn btn-neutral float-left" title="Welcome to FLUTE documentation!" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
-        <a href="dataprep.html" class="btn btn-neutral float-right" title="Data Preparation" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="scenarios.html" class="btn btn-neutral float-right" title="Adding New Scenarios" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
   <hr/>

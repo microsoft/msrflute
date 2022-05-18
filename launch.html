@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" >
+<head>
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Launch FLUTE &mdash; FLUTE  documentation</title><link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+  <!--[if lt IE 9]>
+    <script src="_static/js/html5shiv.min.js"></script>
+  <![endif]-->
+  <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+        <script type="text/javascript" src="_static/jquery.js"></script>
+        <script type="text/javascript" src="_static/underscore.js"></script>
+        <script type="text/javascript" src="_static/doctools.js"></script>
+        <script type="text/javascript" src="_static/language_data.js"></script>
+    <script src="_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Advanced Topics" href="advanced.html" />
+    <link rel="prev" title="Adding New Scenarios" href="scenarios.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+            <a href="index.html" class="icon icon-home"> FLUTE
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="overview.html">FLUTE Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="scenarios.html">Adding New Scenarios</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Launch FLUTE</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#local-run">Local run</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#aml-run">AML Run</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="advanced.html">Advanced Topics</a></li>
+<li class="toctree-l1"><a class="reference internal" href="reference.html">Option Reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="class_reference.html">Class Reference</a></li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">FLUTE</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="index.html" class="icon icon-home"></a> &raquo;</li>
+      <li>Launch FLUTE</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="_sources/launch.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="launch-flute">
+<h1>Launch FLUTE<a class="headerlink" href="#launch-flute" title="Permalink to this headline">¶</a></h1>
+<section id="local-run">
+<h2>Local run<a class="headerlink" href="#local-run" title="Permalink to this headline">¶</a></h2>
+<p>Install the requirements stated inside of requirements.txt. Ideally this sould be done inside of a virtual environment, for instance, using Anaconda.</p>
+<p>You will also need some MPI runtime such as OpenMPI (on Linux) or MS-MPI (on Windows). There is no setup.py as FLUTE is not currently distributed as a package, but instead meant to run from the root of the repository.</p>
+<p>After this initial setup you can use your data for launching a local run. However the following instructions will be adapted to run <code class="docutils literal notranslate"><span class="pre">nlg_gru</span></code> task. For running this example, you need to first download and preprocess the data. Instructions can be found <a class="reference external" href="https://github.com/microsoft/msrflute/tree/main/testing">here</a>.  Once the data is available you can run FLUTE from root as follows:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>mpiexec -n <span class="m">3</span> python e2e_trainer.py -dataPath ./testing/mockup -outputPath scratch -config testing/configs/hello_world_local.yaml -task nlg_gru
+</pre></div>
+</div>
+<p>If the setup of the experiment has been done correctly, after the model initialization we would be able to see the clients being trained:</p>
+<figure class="align-center" id="id1">
+<a class="reference internal image-reference" href="_images/run.png"><img alt="_images/run.png" src="_images/run.png" style="width: 800px;" /></a>
+<figcaption>
+<p><span class="caption-text">Local run for nlg_gru task.</span><a class="headerlink" href="#id1" title="Permalink to this image">¶</a></p>
+</figcaption>
+</figure>
+</section>
+<section id="aml-run">
+<h2>AML Run<a class="headerlink" href="#aml-run" title="Permalink to this headline">¶</a></h2>
+<p>FLUTE has a native integration for job submissions with Azure ML, allowing users to use the built-in CLI or web interface for job/experiment tracking.</p>
+<p>For running experiments on AzureML, the CLI can help. You should first install the CLI <a class="reference external" href="https://docs.microsoft.com/en-us/azure/machine-learning/reference-azure-machine-learning-cli">install the CLI</a> (make sure you have v2) and <a class="reference external" href="https://docs.microsoft.com/en-us/azure/machine-learning/how-to-manage-workspace-cli?tabs=vnetpleconfigurationsv1cli%2Ccreatenewresources%2Cworkspaceupdatev1%2Cworkspacesynckeysv1%2Cworkspacedeletev1">create a resource group and workspace</a>. You can then create a compute cluster, type <code class="docutils literal notranslate"><span class="pre">az</span> <span class="pre">ml</span> <span class="pre">compute</span> <span class="pre">create</span> <span class="pre">-h</span></code> for more info. Afterwards, you should write a YAML file with instructions for the job; we provide a simple example below:</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">experiment_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">basic_example</span><span class="w"></span>
+<span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Basic example of AML config for submitting FLUTE jobs</span><span class="w"></span>
+<span class="nt">code</span><span class="p">:</span><span class="w"></span>
+<span class="nt">local_path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">.</span><span class="w"></span>
+<span class="nt">compute</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">azureml:Test</span><span class="w"></span>
+<span class="nt">environment</span><span class="p">:</span><span class="w"></span>
+<span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pytorch/pytorch:1.9.0-cuda10.2-cudnn7-devel</span><span class="w"></span>
+<span class="nt">inputs</span><span class="p">:</span><span class="w"></span>
+<span class="nt">data</span><span class="p">:</span><span class="w"></span>
+<span class="w">    </span><span class="nt">folder</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">azureml://datastores/data/paths/cifar</span><span class="w"></span>
+<span class="w">    </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">rw_mount</span><span class="w"></span>
+<span class="nt">command</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">&gt;</span><span class="w"></span>
+<span class="l l-Scalar l-Scalar-Plain">apt -y update &amp;&amp;</span><span class="w"></span>
+<span class="l l-Scalar l-Scalar-Plain">apt -y install openmpi-bin libopenmpi-dev openssh-client &amp;&amp;</span><span class="w"></span>
+<span class="l l-Scalar l-Scalar-Plain">python3 -m pip install --upgrade pip &amp;&amp;</span><span class="w"></span>
+<span class="l l-Scalar l-Scalar-Plain">python3 -m pip install -r requirements.txt &amp;&amp;</span><span class="w"></span>
+<span class="l l-Scalar l-Scalar-Plain">mpiexec --allow-run-as-root -n 4 python e2e_trainer.py</span><span class="w"></span>
+<span class="l l-Scalar l-Scalar-Plain">-outputPath=./outputs</span><span class="w"></span>
+<span class="l l-Scalar l-Scalar-Plain">-dataPath={inputs.data}</span><span class="w"></span>
+<span class="l l-Scalar l-Scalar-Plain">-task=classif_cnn</span><span class="w"></span>
+<span class="l l-Scalar l-Scalar-Plain">-config=./experiments/classif_cnn/config.yaml|</span><span class="w"></span>
+</pre></div>
+</div>
+<p>You should replace <code class="docutils literal notranslate"><span class="pre">compute</span></code> with the name of the one you created before, and adjust the path of the datastore containing the data. In the example above, we created a datastore called <code class="docutils literal notranslate"><span class="pre">data</span></code> and added to it a folder called <code class="docutils literal notranslate"><span class="pre">cifar</span></code>, which contained the two HDF5 files. The command passed above will install dependencies and then launch an MPI job with 4 threads, for the experiment defined in <code class="docutils literal notranslate"><span class="pre">experiments/classif_cnn</span></code>. Details on how to run a job using the AzureML CLI are given in its <a class="reference external" href="https://docs.microsoft.com/en-us/azure/machine-learning/how-to-train-cli">documentation</a> , but typically it suffices to set up the environment and type <code class="docutils literal notranslate"><span class="pre">az</span> <span class="pre">ml</span> <span class="pre">job</span> <span class="pre">create</span> <span class="pre">-f</span> <span class="pre">&lt;name-of-the-yaml-file&gt;</span></code>. In the same page of the documentation, you can also find more info about how to set up the YAML file above, in case other changes are needed.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>The local_path above is relative to the location of the YAML file. Setting it to <code class="docutils literal notranslate"><span class="pre">.</span></code> assumes it is in the same folder as <code class="docutils literal notranslate"><span class="pre">e2e_trainer.py</span></code>.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>All files on this folder will be uploaded to Azure, including hidden folders such as <code class="docutils literal notranslate"><span class="pre">.git</span></code>, make sure to remove large files and folders that are not needed.</p>
+</div>
+<p>After launching the experiment, you can follow it on AzureML Studio, which prints logs, plots metrics and makes the output easily available after the experiment is finished.</p>
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="scenarios.html" class="btn btn-neutral float-left" title="Adding New Scenarios" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="advanced.html" class="btn btn-neutral float-right" title="Advanced Topics" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2021, Microsoft Research.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

@@ -11,8 +11,8 @@ Welcome to FLUTE documentation!
    :caption: Contents:
 
    overview
-   dataprep
    scenarios
+   launch
    advanced
    reference
    class_reference

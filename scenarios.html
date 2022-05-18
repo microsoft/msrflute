@@ -17,8 +17,8 @@
     <script src="_static/js/theme.js"></script>
     <link rel="index" title="Index" href="genindex.html" />
     <link rel="search" title="Search" href="search.html" />
-    <link rel="next" title="Advanced Topics" href="advanced.html" />
-    <link rel="prev" title="Data Preparation" href="dataprep.html" /> 
+    <link rel="next" title="Launch FLUTE" href="launch.html" />
+    <link rel="prev" title="FLUTE Overview" href="overview.html" /> 
 </head>
 
 <body class="wy-body-for-nav"> 
@@ -39,14 +39,14 @@
               <p><span class="caption-text">Contents:</span></p>
 <ul class="current">
 <li class="toctree-l1"><a class="reference internal" href="overview.html">FLUTE Overview</a></li>
-<li class="toctree-l1"><a class="reference internal" href="dataprep.html">Data Preparation</a></li>
 <li class="toctree-l1 current"><a class="current reference internal" href="#">Adding New Scenarios</a><ul>
-<li class="toctree-l2"><a class="reference internal" href="#requirements">Requirements</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#copy-the-files">Copy the files</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#create-a-model-configuration-file">Create a model configuration file</a></li>
-<li class="toctree-l2"><a class="reference internal" href="#troubleshooting">Troubleshooting</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#data-preparation">Data Preparation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#add-the-model-to-flute">Add the model to FLUTE</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#implement-new-metrics">Implement new metrics</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#create-the-configuration-file">Create the configuration file</a></li>
 </ul>
 </li>
+<li class="toctree-l1"><a class="reference internal" href="launch.html">Launch FLUTE</a></li>
 <li class="toctree-l1"><a class="reference internal" href="advanced.html">Advanced Topics</a></li>
 <li class="toctree-l1"><a class="reference internal" href="reference.html">Option Reference</a></li>
 <li class="toctree-l1"><a class="reference internal" href="class_reference.html">Class Reference</a></li>
@@ -78,69 +78,214 @@
              
   <section id="adding-new-scenarios">
 <h1>Adding New Scenarios<a class="headerlink" href="#adding-new-scenarios" title="Permalink to this headline">¶</a></h1>
-<section id="requirements">
-<h2>Requirements<a class="headerlink" href="#requirements" title="Permalink to this headline">¶</a></h2>
-<p>Before adding a new scenario in FLUTE, make sure that your files comply with following:</p>
-<ul class="simple">
-<li><p>The model class has declared the functions: loss(), inference(), set_eval() and set_train()</p></li>
-<li><p>Inference function is used for testing and must return loss, accuracy and batch size.</p></li>
-<li><p>Raw data input must be stored in JSON or HDF5 files</p></li>
-<li><p>FLUTE assumes the following format from the text data</p></li>
+<section id="data-preparation">
+<h2>Data Preparation<a class="headerlink" href="#data-preparation" title="Permalink to this headline">¶</a></h2>
+<p>At this moment FLUTE only allows JSON and HDF5 files, and requires an specific formatting for the training data. Here is a sample data blob for language model training.</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="nt">&quot;users&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;bert&quot;</span><span class="p">,</span><span class="s2">&quot;elmo&quot;</span><span class="p">],</span><span class="w"></span>
+<span class="w">    </span><span class="nt">&quot;user_data&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">        </span><span class="nt">&quot;bert&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;x&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;my name is Bert.&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;I live with Ernie.&quot;</span><span class="p">]},</span><span class="w"></span>
+<span class="w">        </span><span class="nt">&quot;elmo&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;x&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;Big Bird is my friend.&quot;</span><span class="p">]}</span><span class="w"></span>
+<span class="w">    </span><span class="p">},</span><span class="w"></span>
+<span class="w">    </span><span class="nt">&quot;num_samples&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="mi">2</span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="p">]</span><span class="w"></span>
+<span class="p">}</span><span class="w"></span>
+</pre></div>
+</div>
+<p>The blob consists of three fields:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">users</span></code>: indicates a unique id for each user in the training data.  Users are sampled uniformly to create client tasks during training. There could be many more users than client tasks per round or even over all client tasks over all rounds.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">num_samples</span></code> : indicates the number of samples for each user, in the same order as <code class="docutils literal notranslate"><span class="pre">users</span></code> list.  That is, for any index <code class="docutils literal notranslate"><span class="pre">i</span></code> in <code class="docutils literal notranslate"><span class="pre">range(len(data['users']))</span></code>:</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">user_data</span></code>: contains user-indexed training data. Each user’s data is a dictionary of the form <code class="docutils literal notranslate"><span class="pre">{&quot;x&quot;:</span> <span class="pre">[list</span> <span class="pre">of</span> <span class="pre">examples]}</span></code>.</p></li>
 </ul>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="o">{</span><span class="s2">&quot;num_samples&quot;</span>: <span class="o">[</span>sample_1, ......, sample_n<span class="o">]</span>,
-  <span class="s2">&quot;users&quot;</span>:<span class="o">[</span>user_1, ......, user_n<span class="o">]</span>,
-  <span class="s2">&quot;user_data&quot;</span>: <span class="o">{</span>
-                  <span class="s2">&quot;user_1&quot;</span>:<span class="o">{</span>
-                              <span class="s2">&quot;x&quot;</span>:<span class="o">[</span> .. data..,
-                                  .....data_n..<span class="o">]</span>
-                           <span class="o">}</span>,
-                           .......
-                  <span class="s2">&quot;user_n&quot;</span>:<span class="o">{</span>
-                              <span class="s2">&quot;x&quot;</span>:<span class="o">[</span> .. data..,
-                                  .....data_n..<span class="o">]</span>
-                           <span class="o">}</span>
-
-               <span class="o">}</span>
-<span class="o">}</span>
+</div></blockquote>
+<p>If labels are needed by the task, <code class="docutils literal notranslate"><span class="pre">user_data_label</span></code> will be required by FLUTE with the user-indexed labels. The format should be similar to <code class="docutils literal notranslate"><span class="pre">user_data</span></code> where each user’s label is a dictionary of the form <code class="docutils literal notranslate"><span class="pre">{&quot;x&quot;:</span> <span class="pre">[list</span> <span class="pre">of</span> <span class="pre">labels]}</span></code> as follows:</p>
+<div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="nt">&quot;user_data_label&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
+<span class="w">    </span><span class="nt">&quot;bert&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;x&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="p">,</span><span class="w"> </span><span class="mi">1</span><span class="w"> </span><span class="p">]},</span><span class="w"></span>
+<span class="w">    </span><span class="nt">&quot;elmo&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">&quot;x&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="w"> </span><span class="mi">0</span><span class="w"> </span><span class="p">]}</span><span class="w"></span>
+<span class="w">    </span><span class="p">}</span><span class="w"></span>
 </pre></div>
 </div>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p>The list ‘x’ inside of the dictionary with the name of the user, can contain data or arrays.
-Alternatively, instead of using a single-key dictionary, a list of lists might be assigned to each user.</p>
+<p>Test and validation data is formatted similarly.</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Test/validate data is dispatched to workers by partitioning on users. If your test data isn’t user-partitioned, we recommend partitioning it uniformly using some dummy user ids.</p>
 </div>
 </section>
-<section id="copy-the-files">
-<h2>Copy the files<a class="headerlink" href="#copy-the-files" title="Permalink to this headline">¶</a></h2>
-<p>All mandatory files must be inside a folder with the same name as the model in /models. Please adjust your files with the following
-naming structure so FLUTE can be able to find all the scripts needed.</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>model_name
+<section id="add-the-model-to-flute">
+<h2>Add the model to FLUTE<a class="headerlink" href="#add-the-model-to-flute" title="Permalink to this headline">¶</a></h2>
+<p>FLUTE requires the model declaration framed in PyTorch, which must inhereit from the <cite>BaseModel</cite> class defined in <cite>core/model.py</cite>. The following methods should be overridden:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>__init__: model definition</p></li>
+<li><p>loss: computes the loss used for training rounds</p></li>
+<li><p>inference: computes the metrics used during evaluation rounds</p></li>
+</ul>
+</div></blockquote>
+<p>Please see the example provided below:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">core.model</span> <span class="kn">import</span> <span class="n">BaseModel</span>
+
+<span class="k">class</span> <span class="nc">CNN</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+<span class="sd">&#39;&#39;&#39;This is a PyTorch model with some extra methods&#39;&#39;&#39;</span>
+
+<span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model_config</span><span class="p">):</span>
+    <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">net</span> <span class="o">=</span> <span class="n">Net</span><span class="p">()</span>
+
+<span class="k">def</span> <span class="nf">loss</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">input</span><span class="p">:</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">torch</span><span class="o">.</span><span class="n">Tensor</span><span class="p">:</span>
+    <span class="sd">&#39;&#39;&#39;Performs forward step and computes the loss&#39;&#39;&#39;</span>
+    <span class="n">device</span> <span class="o">=</span> <span class="s1">&#39;cuda&#39;</span> <span class="k">if</span> <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">is_available</span><span class="p">()</span> <span class="k">else</span> <span class="s1">&#39;cpu&#39;</span>
+    <span class="n">features</span><span class="p">,</span> <span class="n">labels</span> <span class="o">=</span> <span class="nb">input</span><span class="p">[</span><span class="s1">&#39;x&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">),</span> <span class="nb">input</span><span class="p">[</span><span class="s1">&#39;y&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+    <span class="n">output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">net</span><span class="o">.</span><span class="n">forward</span><span class="p">(</span><span class="n">features</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">F</span><span class="o">.</span><span class="n">cross_entropy</span><span class="p">(</span><span class="n">output</span><span class="p">,</span> <span class="n">labels</span><span class="o">.</span><span class="n">long</span><span class="p">())</span>
+
+<span class="k">def</span> <span class="nf">inference</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">input</span><span class="p">):</span>
+    <span class="sd">&#39;&#39;&#39;Performs forward step and computes metrics&#39;&#39;&#39;</span>
+    <span class="n">device</span> <span class="o">=</span> <span class="s1">&#39;cuda&#39;</span> <span class="k">if</span> <span class="n">torch</span><span class="o">.</span><span class="n">cuda</span><span class="o">.</span><span class="n">is_available</span><span class="p">()</span> <span class="k">else</span> <span class="s1">&#39;cpu&#39;</span>
+    <span class="n">features</span><span class="p">,</span> <span class="n">labels</span> <span class="o">=</span> <span class="nb">input</span><span class="p">[</span><span class="s1">&#39;x&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">),</span> <span class="nb">input</span><span class="p">[</span><span class="s1">&#39;y&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+    <span class="n">output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">net</span><span class="o">.</span><span class="n">forward</span><span class="p">(</span><span class="n">features</span><span class="p">)</span>
+
+    <span class="n">n_samples</span> <span class="o">=</span> <span class="n">features</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">accuracy</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">mean</span><span class="p">((</span><span class="n">torch</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="n">output</span><span class="p">,</span> <span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span> <span class="o">==</span> <span class="n">labels</span><span class="p">)</span><span class="o">.</span><span class="n">float</span><span class="p">())</span><span class="o">.</span><span class="n">item</span><span class="p">()</span>
+    <span class="n">f1</span> <span class="o">=</span> <span class="n">f1_score</span><span class="p">(</span><span class="n">labels</span><span class="o">.</span><span class="n">cpu</span><span class="p">(),</span> <span class="n">torch</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="n">output</span><span class="p">,</span> <span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">cpu</span><span class="p">(),</span> <span class="n">average</span><span class="o">=</span><span class="s1">&#39;micro&#39;</span><span class="p">)</span>
+
+    <span class="c1"># NOTE: Only the keys &#39;output&#39;,&#39;acc&#39; and &#39;batch_size&#39; does not require</span>
+    <span class="c1"># extra fields as &#39;value&#39; and &#39;higher is better&#39;. FLUTE requires this</span>
+    <span class="c1"># format only for customized metrics.</span>
+
+    <span class="k">return</span> <span class="p">{</span><span class="s1">&#39;output&#39;</span><span class="p">:</span><span class="n">output</span><span class="p">,</span> <span class="s1">&#39;acc&#39;</span><span class="p">:</span> <span class="n">accuracy</span><span class="p">,</span> <span class="s1">&#39;batch_size&#39;</span><span class="p">:</span> <span class="n">n_samples</span><span class="p">,</span> \
+            <span class="s1">&#39;f1_score&#39;</span><span class="p">:</span> <span class="p">{</span><span class="s1">&#39;value&#39;</span><span class="p">:</span><span class="n">f1</span><span class="p">,</span><span class="s1">&#39;higher_is_better&#39;</span><span class="p">:</span> <span class="kc">True</span><span class="p">}}</span>
+</pre></div>
+</div>
+<p>Once the model is ready, all mandatory files must be in a single folder inside ´{/experiments´. Please adjust your files with the following naming structure so FLUTE can be able to find all the scripts needed.</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>task_name
     <span class="p">|</span>---- dataloaders
           <span class="p">|</span>---- text_dataloader.py
+          <span class="p">|</span>---- text_dataset.py
     <span class="p">|</span>---- utils
-          <span class="p">|</span>---- utils.py
+          <span class="p">|</span>---- utils.py <span class="o">(</span><span class="k">if</span> needed<span class="o">)</span>
     <span class="p">|</span>---- model.py
+    <span class="p">|</span>---- config.yaml
     <span class="p">|</span>---- README.txt
 </pre></div>
 </div>
-<p>In case you need to import a module that has not been considered in FLUTE, this can be added in requirements.txt</p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
-<p>All files must contain only absolute imports, in order to avoid issues when running your job.</p>
+<p>In case you need to import a module that has not been considered in FLUTE, this can be added in requirements.txt</p>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>All files must contain only absolute imports, in order to avoid issues when running.</p>
 </div>
 </section>
-<section id="create-a-model-configuration-file">
-<h2>Create a model configuration file<a class="headerlink" href="#create-a-model-configuration-file" title="Permalink to this headline">¶</a></h2>
-<p>Once your model has been added into FLUTE, it is necessary to create a configuration file (in case you haven’t already), specifiying all the parameters
-for the model. A template has been provided for this in  ./configs/hello_world_local_nlg_gru_json.yaml</p>
+<section id="implement-new-metrics">
+<h2>Implement new metrics<a class="headerlink" href="#implement-new-metrics" title="Permalink to this headline">¶</a></h2>
+<p>The metrics computed during the evaluation rounds are declared inside <cite>inference()</cite> in the model declaration. FLUTE requires this function to return a dictionary with at least <cite>output</cite>, <cite>acc</cite> and <cite>batch_size</cite> as follows:</p>
+<blockquote>
+<div><div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="o">{</span> <span class="s2">&quot;output&quot;</span>: loss, <span class="s2">&quot;acc&quot;</span>: accuracy, <span class="s2">&quot;batch_size&quot;</span>: batch_size<span class="o">}</span>
+</pre></div>
+</div>
+</div></blockquote>
+<p>In order to add a new metric, we just need to add the key inside the same dictionary with the following format:</p>
+<blockquote>
+<div><div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="o">{</span> <span class="s2">&quot;output&quot;</span>: loss,
+  <span class="s2">&quot;acc&quot;</span>: accuracy,
+  <span class="s2">&quot;batch_size&quot;</span>: batch_size,
+  <span class="s2">&quot;custom_metric_1&quot;</span>: <span class="o">{</span><span class="s2">&quot;value&quot;</span>: value1 ,<span class="s1">&#39;higher_is_better&#39;</span>: True<span class="o">}</span>,
+  <span class="s2">&quot;custom_metric_2&quot;</span>: <span class="o">{</span><span class="s2">&quot;value&quot;</span>: value2 ,<span class="s1">&#39;higher_is_better&#39;</span>: False<span class="o">}}</span>
+</pre></div>
+</div>
+</div></blockquote>
+<p>Once the keys have been included in the returning dictionary from <cite>inference()</cite>, FLUTE will automatically recognize them during the test/val rounds.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Only the keys <cite>output</cite>, <cite>acc</cite> and <cite>batch_size</cite> does not require a dictionary.</p>
+</div>
 </section>
-<section id="troubleshooting">
-<h2>Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permalink to this headline">¶</a></h2>
-<ul class="simple">
-<li><p>If a module is not being recognized by Python, verify that this module has been previously installed or is included in requirements.txt</p></li>
-<li><p>If the model class is not being detected, make sure the name of the model class is the same as specified in the yaml configuration file (case sensitive)</p></li>
-<li><p>If the dataloader type is not being detected, make sure that field ‘loader_type’ has been declared in the yaml configuration file.</p></li>
+<section id="create-the-configuration-file">
+<h2>Create the configuration file<a class="headerlink" href="#create-the-configuration-file" title="Permalink to this headline">¶</a></h2>
+<p>The configuration file will allow you to specify the setup in your experiment, such as the optimizer, learning rate, number of clients and so on. FLUTE requires the following 5 sections:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>model_config: path an parameters (if needed) to initialize the model.</p></li>
+<li><p>dp_config: differential privacy setup.</p></li>
+<li><p>privacy_metrics_config: for cache data to compute additional metrics.</p></li>
+<li><p>server_config: determines all the server-side settings.</p></li>
+<li><p>client_config: dictates the learning parameters for client-side model updates.</p></li>
 </ul>
+</div></blockquote>
+<p>The blob below indicates the basic parameters required by FLUTE to run an experiment:</p>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">model_config</span><span class="p">:</span><span class="w"></span>
+<span class="w">    </span><span class="nt">model_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">CNN</span><span class="w">                                    </span><span class="c1"># Class name in model.py</span><span class="w"></span>
+<span class="w">    </span><span class="nt">model_folder</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">experiments/classif_cnn/model.py</span><span class="w">     </span><span class="c1"># Relative path to the model declaration</span><span class="w"></span>
+
+<span class="nt">dp_config</span><span class="p">:</span><span class="w"></span>
+<span class="w">    </span><span class="nt">enable_local_dp</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w">                             </span><span class="c1"># DP disabled</span><span class="w"></span>
+
+<span class="nt">privacy_metrics_config</span><span class="p">:</span><span class="w"></span>
+<span class="w">    </span><span class="nt">apply_metrics</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w">                               </span><span class="c1"># Privacy metrics disabled</span><span class="w"></span>
+
+<span class="nt">strategy</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">DGA</span><span class="w">                                          </span><span class="c1"># Federated optimizar (DGA or FedAvg)</span><span class="w"></span>
+
+<span class="nt">server_config</span><span class="p">:</span><span class="w"></span>
+<span class="w">    </span><span class="nt">wantRL</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w">                                      </span><span class="c1"># Whether to use RL-based meta-optimizers</span><span class="w"></span>
+<span class="w">    </span><span class="nt">resume_from_checkpoint</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w">                      </span><span class="c1"># Restart from checkpoint if file exists</span><span class="w"></span>
+<span class="w">    </span><span class="nt">do_profiling</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w">                                </span><span class="c1"># Run profiler and compute runtime metrics</span><span class="w"></span>
+<span class="w">    </span><span class="nt">optimizer_config</span><span class="p">:</span><span class="w">                                  </span><span class="c1"># Optimizer used to update the global model</span><span class="w"></span>
+<span class="w">        </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sgd</span><span class="w"></span>
+<span class="w">        </span><span class="nt">lr</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.0</span><span class="w"></span>
+<span class="w">    </span><span class="nt">annealing_config</span><span class="p">:</span><span class="w">                                  </span><span class="c1"># Annealer for the learning rate</span><span class="w"></span>
+<span class="w">        </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">step_lr</span><span class="w"></span>
+<span class="w">        </span><span class="nt">step_interval</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">epoch</span><span class="w"></span>
+<span class="w">        </span><span class="nt">gamma</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.0</span><span class="w"></span>
+<span class="w">        </span><span class="nt">step_size</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">100</span><span class="w"></span>
+<span class="w">    </span><span class="nt">val_freq</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">50</span><span class="w">                                       </span><span class="c1"># Validation rounds frequency</span><span class="w"></span>
+<span class="w">    </span><span class="nt">rec_freq</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">100</span><span class="w">                                      </span><span class="c1"># Testing rounds frequency</span><span class="w"></span>
+<span class="w">    </span><span class="nt">initial_val</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">                                  </span><span class="c1"># Enable initial validation round</span><span class="w"></span>
+<span class="w">    </span><span class="nt">initial_rec</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span><span class="w">                                  </span><span class="c1"># Enable initial testing round</span><span class="w"></span>
+<span class="w">    </span><span class="nt">max_iteration</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">2000</span><span class="w">                                </span><span class="c1"># Total of iteration rounds</span><span class="w"></span>
+<span class="w">    </span><span class="nt">num_clients_per_iteration</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10</span><span class="w">                      </span><span class="c1"># Clients per interation</span><span class="w"></span>
+<span class="w">    </span><span class="nt">data_config</span><span class="p">:</span><span class="w">                                       </span><span class="c1"># Information for the test/val dataloaders</span><span class="w"></span>
+<span class="w">        </span><span class="nt">val</span><span class="p">:</span><span class="w"></span>
+<span class="w">            </span><span class="nt">batch_size</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10000</span><span class="w"></span>
+<span class="w">            </span><span class="nt">loader_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">text</span><span class="w"></span>
+<span class="w">            </span><span class="nt">val_data</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">test_data.hdf5</span><span class="w"></span>
+<span class="w">        </span><span class="nt">test</span><span class="p">:</span><span class="w"></span>
+<span class="w">            </span><span class="nt">batch_size</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10000</span><span class="w"></span>
+<span class="w">            </span><span class="nt">loader_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">text</span><span class="w"></span>
+<span class="w">            </span><span class="nt">test_data</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">test_data.hdf5</span><span class="w"></span>
+<span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">model_optimization</span><span class="w">                           </span><span class="c1"># Server type (model_optimization is the only available for now)</span><span class="w"></span>
+<span class="w">    </span><span class="nt">aggregate_median</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">softmax</span><span class="w">                          </span><span class="c1"># How aggregations weights are computed</span><span class="w"></span>
+<span class="w">    </span><span class="nt">initial_lr_client</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.001</span><span class="w">                           </span><span class="c1"># Learning rate used on optimizer</span><span class="w"></span>
+<span class="w">    </span><span class="nt">lr_decay_factor</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.0</span><span class="w">                               </span><span class="c1"># Decay factor for LR</span><span class="w"></span>
+<span class="w">    </span><span class="nt">weight_train_loss</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">train_loss</span><span class="w">                      </span><span class="c1"># Determines how each client&#39;s weight is computed (e.g. grad_mean_loss, train_loss)</span><span class="w"></span>
+<span class="w">    </span><span class="nt">best_model_criterion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">f1_score</span><span class="w">                     </span><span class="c1"># Determines the best model based on minimal loss, for checkpointing</span><span class="w"></span>
+<span class="w">    </span><span class="nt">fall_back_to_best_model</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w">                     </span><span class="c1"># If a model degrades, use the previous best model</span><span class="w"></span>
+<span class="w">    </span><span class="nt">softmax_beta</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1.0</span><span class="w">                                  </span><span class="c1"># Beta value to use for the softmax DGA</span><span class="w"></span>
+
+<span class="nt">client_config</span><span class="p">:</span><span class="w"></span>
+<span class="w">    </span><span class="nt">do_profiling</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w">                                </span><span class="c1"># Run profiling and compute runtime metrics</span><span class="w"></span>
+<span class="w">    </span><span class="nt">ignore_subtask</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span><span class="w">                              </span><span class="c1"># Determines which model loss to use. In most cases just set to False.</span><span class="w"></span>
+<span class="w">    </span><span class="nt">data_config</span><span class="p">:</span><span class="w">                                       </span><span class="c1"># Information for the train dataloader</span><span class="w"></span>
+<span class="w">        </span><span class="nt">train</span><span class="p">:</span><span class="w"></span>
+<span class="w">            </span><span class="nt">batch_size</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4</span><span class="w"></span>
+<span class="w">            </span><span class="nt">loader_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">text</span><span class="w"></span>
+<span class="w">            </span><span class="nt">list_of_train_data</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">train_data.hdf5</span><span class="w"></span>
+<span class="w">            </span><span class="nt">desired_max_samples</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">50000</span><span class="w"></span>
+<span class="w">    </span><span class="nt">optimizer_config</span><span class="p">:</span><span class="w">                                  </span><span class="c1"># Optimizer used by the client</span><span class="w"></span>
+<span class="w">        </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sgd</span><span class="w"></span>
+<span class="w">        </span><span class="nt">lr</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.001</span><span class="w">                                      </span><span class="c1"># This is overridden by `initial_lr_client`</span><span class="w"></span>
+<span class="w">        </span><span class="nt">momentum</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.9</span><span class="w"></span>
+<span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">optimization</span><span class="w">                                 </span><span class="c1"># The type of client (always set &quot;optimization for now&quot;)</span><span class="w"></span>
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Documented templates for all the options available in the configuration files are provided inside configs folder.</p>
+</div>
 </section>
 </section>
 
@@ -148,8 +293,8 @@ for the model. A template has been provided for this in  ./configs/hello_world_l
            </div>
           </div>
           <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
-        <a href="dataprep.html" class="btn btn-neutral float-left" title="Data Preparation" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
-        <a href="advanced.html" class="btn btn-neutral float-right" title="Advanced Topics" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+        <a href="overview.html" class="btn btn-neutral float-left" title="FLUTE Overview" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="launch.html" class="btn btn-neutral float-right" title="Launch FLUTE" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
     </div>
 
   <hr/>
