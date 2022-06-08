@@ -37,12 +37,10 @@ server_config:
     data_config:                                       # where to get val and test data from
         val:
             batch_size: 10000
-            loader_type: text
-            val_data: data/classif_cnn/test_data.hdf5
+            val_data: null
         test:
             batch_size: 10000
-            loader_type: text
-            test_data: data/classif_cnn/test_data.hdf5
+            test_data: null
     type: model_optimization
     aggregate_median: softmax                          # how aggregations weights are computed
     initial_lr_client: 0.001                           # learning rate used on client optimizer
@@ -59,8 +57,7 @@ client_config:
     data_config:                                       # where to get training data from
         train:
             batch_size: 4
-            loader_type: text
-            list_of_train_data: data/classif_cnn/train_data.hdf5
+            list_of_train_data: null
             desired_max_samples: 50000
     optimizer_config:                                  # this is the optimizer used by the client
         type: sgd

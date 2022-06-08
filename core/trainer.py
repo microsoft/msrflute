@@ -5,7 +5,6 @@ import logging
 import os
 import re
 
-from importlib.machinery import SourceFileLoader
 import numpy as np
 import torch
 import torch.nn as nn
@@ -205,7 +204,6 @@ class Trainer(TrainerBase):
         ss_scheduler: scheduled sampler.
         train_dataloader (torch.data.utils.DataLoader): dataloader that
             provides the training data.
-        val_dataloader (torch.data.utils.DataLoader): provides val data.
         server_replay_config (dict or None): config for replaying training;
             defaults to None, in which case no replaying happens.
         optimizer (torch.optim.Optimizer or None): optimizer that will be used
@@ -222,7 +220,6 @@ class Trainer(TrainerBase):
         model,
         ss_scheduler,
         train_dataloader,
-        val_dataloader,
         server_replay_config=None,
         optimizer=None,
         max_grad_norm=None,
@@ -255,7 +252,6 @@ class Trainer(TrainerBase):
                                                 self.anneal_config,
                                                 self.optimizer)
 
-        self.val_dataloader = val_dataloader
         self.cached_batches = []
         self.ss_scheduler = ss_scheduler
 

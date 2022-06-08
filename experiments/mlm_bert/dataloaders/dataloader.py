@@ -2,13 +2,13 @@
 # Licensed under the MIT license.
 
 from transformers.data.data_collator import default_data_collator, DataCollatorWithPadding
-from torch.utils.data import DataLoader, RandomSampler, SequentialSampler
+from torch.utils.data import RandomSampler, SequentialSampler
 from transformers import AutoTokenizer
 from transformers import DataCollatorForLanguageModeling
-from experiments.mlm_bert.dataloaders.text_dataset import TextDataset
-import torch
+from experiments.mlm_bert.dataloaders.dataset import Dataset
+from core.dataloader import BaseDataLoader
 
-class TextDataLoader(DataLoader):
+class DataLoader(BaseDataLoader):
     """
     PyTorch dataloader for loading text data from
     text_dataset.
@@ -40,7 +40,7 @@ class TextDataLoader(DataLoader):
 
         print("Tokenizer is: ",tokenizer)
         
-        dataset = TextDataset(
+        dataset = Dataset(
                                 data,
                                 args= args,
                                 test_only = self.mode is not 'train',
@@ -63,7 +63,7 @@ class TextDataLoader(DataLoader):
 
         if self.mode == 'train':
             train_sampler = RandomSampler(dataset)
-            super(TextDataLoader, self).__init__(
+            super(DataLoader, self).__init__(
                                             dataset,
                                             batch_size=self.batch_size,
                                             sampler=train_sampler,
@@ -75,7 +75,7 @@ class TextDataLoader(DataLoader):
                                             
         elif self.mode == 'val' or self.mode == 'test':
             eval_sampler = SequentialSampler(dataset)
-            super(TextDataLoader, self).__init__(
+            super(DataLoader, self).__init__(
                                             dataset,
                                             sampler=eval_sampler,
                                             batch_size= self.batch_size,
@@ -87,9 +87,6 @@ class TextDataLoader(DataLoader):
 
         else:
             raise Exception("Sorry, there is something wrong with the 'mode'-parameter ")
-
-    def create_loader(self):
-        return self
 
     def get_user(self):
         return self.utt_ids

@@ -49,7 +49,7 @@ run = Run.get_context()
 
 
 class OptimizationServer(federated.Server):
-    def __init__(self, num_clients, model, optimizer, ss_scheduler, data_path, model_path, train_dataloader,
+    def __init__(self, num_clients, model, optimizer, ss_scheduler, data_path, model_path, train_dataloader, train_dataset,
                  val_dataloader, test_dataloader, config, config_server):
         '''Implement Server's orchestration and aggregation.
 
@@ -133,6 +133,7 @@ class OptimizationServer(federated.Server):
         # Creating an instance for the server-side trainer (runs mini-batch SGD)
         self.server_replay_iterations = None
         self.server_trainer = None
+        self.train_dataset = train_dataset
         if train_dataloader is not None:
             assert 'server_replay_config' in server_config, 'server_replay_config is not set'
             assert 'optimizer_config' in server_config[
@@ -305,10 +306,10 @@ class OptimizationServer(federated.Server):
                     num_clients_curr_iter) if num_clients_curr_iter > 0 else self.client_idx_list
                 sampled_clients = [
                     Client(
-                        client_id,
+                        [client_id],
                         self.config,
                         self.config['client_config']['type'] == 'optimization',
-                        None
+                        self.train_dataset
                     ) for client_id in sampled_idx_clients
                 ]
 

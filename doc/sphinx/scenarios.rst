@@ -3,8 +3,12 @@ Adding New Scenarios
 
 Data Preparation
 ------------
-
-At this moment FLUTE only allows JSON and HDF5 files, and requires an specific formatting for the training data. Here is a sample data blob for language model training.
+FLUTE provides the abstract class `BaseDataset` inside ``core/dataset.py`` that can be used  to wrap
+any dataset and make it compatible with the platform. The dataset should be able to access all the data, 
+and store it in the attributes `user_list`, `user_data`, `num_samples` and  `user_data_labels` (optional). 
+These attributes are required to have these exact names. The abstract method ``load_data ()`` should be 
+used to instantiate/load the dataset and provide the training format required by FLUTE on-the-fly. 
+Here is a sample data blob for language model training.
 
 .. code:: json
 
@@ -43,7 +47,7 @@ If labels are needed by the task, ``user_data_label`` will be required by FLUTE 
 Add the model to FLUTE
 --------------
 
-FLUTE requires the model declaration framed in PyTorch, which must inhereit from the `BaseModel` class defined in `core/model.py`. The following methods should be overridden:
+FLUTE requires the model declaration framed in PyTorch, which must inhereit from the `BaseModel` class defined in ``core/model.py``. The following methods should be overridden:
 
     * __init__: model definition
     * loss: computes the loss used for training rounds
@@ -92,8 +96,8 @@ Once the model is ready, all mandatory files must be in a single folder inside Â
 
     task_name
         |---- dataloaders
-              |---- text_dataloader.py
-              |---- text_dataset.py
+              |---- dataloader.py
+              |---- dataset.py
         |---- utils
               |---- utils.py (if needed)
         |---- model.py
@@ -130,11 +134,12 @@ Once the keys have been included in the returning dictionary from `inference()`,
 Create the configuration file
 ---------------------------------
 
-The configuration file will allow you to specify the setup in your experiment, such as the optimizer, learning rate, number of clients and so on. FLUTE requires the following 5 sections:
+The configuration file will allow you to specify the setup in your experiment, such as the optimizer, learning rate, number of clients and so on. FLUTE requires the following 6 sections:
 
     * model_config: path an parameters (if needed) to initialize the model.
     * dp_config: differential privacy setup.
     * privacy_metrics_config: for cache data to compute additional metrics.
+    * strategy: defines the federated optimizer.
     * server_config: determines all the server-side settings.
     * client_config: dictates the learning parameters for client-side model updates. 
 
@@ -175,12 +180,10 @@ The blob below indicates the basic parameters required by FLUTE to run an experi
         data_config:                                       # Information for the test/val dataloaders
             val:
                 batch_size: 10000
-                loader_type: text
-                val_data: test_data.hdf5
+                val_data: test_data.hdf5                   # Assign to null for data loaded on-the-fly
             test:
                 batch_size: 10000
-                loader_type: text
-                test_data: test_data.hdf5
+                test_data: test_data.hdf5                  # Assign to null for data loaded on-the-fly
         type: model_optimization                           # Server type (model_optimization is the only available for now)
         aggregate_median: softmax                          # How aggregations weights are computed
         initial_lr_client: 0.001                           # Learning rate used on optimizer
@@ -196,8 +199,7 @@ The blob below indicates the basic parameters required by FLUTE to run an experi
         data_config:                                       # Information for the train dataloader
             train:
                 batch_size: 4
-                loader_type: text
-                list_of_train_data: train_data.hdf5
+                list_of_train_data: train_data.hdf5        # Assign to null for data loaded on-the-fly
                 desired_max_samples: 50000
         optimizer_config:                                  # Optimizer used by the client
             type: sgd

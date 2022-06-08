@@ -37,11 +37,9 @@ server_config:
     data_config:                                       # where to get val and test data from
         val:
             batch_size: 10000
-            loader_type: text
             val_data: test_data.hdf5
         test:
             batch_size: 10000
-            loader_type: text
             test_data: test_data.hdf5
     type: model_optimization
     aggregate_median: softmax                          # how aggregations weights are computed
@@ -59,7 +57,6 @@ client_config:
     data_config:                                       # where to get training data from
         train:
             batch_size: 96
-            loader_type: text
             list_of_train_data: train_data.hdf5
             desired_max_samples: 87000
     optimizer_config:                                  # this is the optimizer used by the client

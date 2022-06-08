@@ -184,10 +184,10 @@ class Evaluation():
             current_total += count
             if current_total > threshold:
                 print_rank(f'sending {len(current_users_idxs)} users', loglevel=logging.DEBUG)
-                yield Client(current_users_idxs, self.config, False, dataloader)
+                yield Client(current_users_idxs, self.config, False, dataloader.dataset)
                 current_users_idxs = list() 
                 current_total = 0
 
         if len(current_users_idxs) != 0:
             print_rank(f'sending {len(current_users_idxs)} users -- residual', loglevel=logging.DEBUG)
-            yield Client(current_users_idxs, self.config, False, dataloader)
+            yield Client(current_users_idxs, self.config, False, dataloader.dataset)

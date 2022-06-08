@@ -4,16 +4,12 @@ Instructions on how to run the experiment, given below.
 
 ## Preparing the data
 
-Right now FLUTE expects data to be provided either in JSON or HDF5 formats. It
-should be made data-agnostic in the near future, but at this moment we need to do some 
-preprocessing before handling the data on the model. For this experiment, we can run the 
+For this experiment, we can create a dummy dataset by running the 
 script located in `testing/create_data.py` as follows:
 
 ```code
     python create_data.py -e nlg
 ```
-to download mock data already preprocessed. A new folder `mockup` will be generated 
-inside `testing` with all data needed for a local run.
 
 A couple of scripts are provided in `utils/preprocessing` for preprocessing .tsv files
 in case you want to use your own data.
@@ -34,7 +30,7 @@ Finally, to launch the experiment locally , it suffices to launch the `e2e_train
 script using MPI, you can use as example the following line:
 
 ```code
-    mpiexec -n 3 python e2e_trainer.py -dataPath .\testing\mockup\ -outputPath scratch -config .\testing\configs\hello_world_local.yaml -task nlg_gru
+    mpiexec -n 3 python e2e_trainer.py -dataPath .\testing\mockup\ -outputPath scratch -config .\testing\configs\hello_world_nlg_gru.yaml -task nlg_gru
 ```
 
 For submitting jobs in Azure ML, we have included the instructions in the `Experiments` 

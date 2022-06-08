@@ -121,8 +121,7 @@
                             'allow_unknown': True,
                             'schema': {
                                 'batch_size': {'required': False, 'type':'integer', 'default': 40},
-                                'loader_type': {'required': False, 'type':'string', 'default':'text'},
-                                'val_data': {'required': True, 'type':'string'},
+                                'val_data': {'required': True, 'type':'string', 'nullable':True},
                                 'tokenizer_type': {'required': False, 'type':'string'},
                                 'prepend_datapath': {'required': False, 'type':'boolean', 'default': False},
                                 'vocab_dict': {'required': False, 'type':'string'},
@@ -142,8 +141,7 @@
                             'allow_unknown': True,
                             'schema': {
                                 'batch_size': {'required': False, 'type':'integer', 'default': 40},
-                                'loader_type': {'required': False, 'type':'string', 'default':'text'},
-                                'test_data': {'required': True, 'type':'string'},
+                                'test_data': {'required': True, 'type':'string', 'nullable': True},
                                 'tokenizer_type': {'required': False, 'type':'string'},
                                 'prepend_datapath': {'required': False, 'type':'boolean', 'default': False},
                                 'vocab_dict': {'required': False, 'type':'string'},
@@ -163,7 +161,6 @@
                             'allow_unknown': True,
                             'schema': {
                                 'batch_size': {'required': False, 'type':'integer', 'default': 40},
-                                'loader_type': {'required': False, 'type':'string', 'default':'text'},
                                 'train_data': {'required': True, 'type':'string'},
                                 'train_data_server': {'required': False, 'type':'string'},
                                 'desired_max_samples': {'required': False, 'type':'integer'},
@@ -248,8 +245,7 @@
                         'allow_unknown': True,
                         'schema': {
                             'batch_size': {'required': False, 'type':'integer', 'default': 40},
-                            'loader_type': {'required': False, 'type':'string', 'default':'text'},
-                            'list_of_train_data': {'required': True, 'type':'string'},
+                            'list_of_train_data': {'required': True, 'type':'string', 'nullable': True},
                             'tokenizer_type': {'required': False, 'type':'string'},
                             'prepend_datapath': {'required': False, 'type':'boolean', 'default': False},
                             'vocab_dict': {'required': False, 'type':'string'},

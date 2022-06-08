@@ -32,16 +32,15 @@ The file `centralized_model.ipynb` can be used to test a centralized run of the 
 
 #### Preparing the data
 
-Right now FLUTE expects data to be provided either in JSON or HDF5 formats. First, place the `mitbih_test.csv` and `mitbig_train.csv` files in the folder `.\ecg_cnn\data\mitbih\`. Next, run preprocess.py in the `utils` folder to generate the HDF5 files. 
+First, place the `mitbih_test.csv` and `mitbig_train.csv` files in the folder `.\ecg_cnn\data\mitbih\`. Next, run preprocess.py in the `utils` folder to generate the HDF5 files. 
 
-## Specifying dataset and data loaders
+## Specifying dataset and dataloaders
 
-Inside the `dataloaders` folder, there are two files: `text_dataset.py` and
-`text_dataloader.py` (the word "text" is used to mimic the other datasets, even
-though in practice this loads images -- this will be changed in the future).
-Both inherit from the Pytorch classes with same name.
+Inside the `dataloaders` folder, there are two files: `dataset.py` and
+`dataloader.py`. Both inherit from the base classes declared in `core`
+folder, that under the hood inhereit from Pytorch classes with same name.
 
-The dataset should be able to access all the data, which is stored in the
+The dataset should be able to access all the data, and store it in the
 attributes `user_list`, `user_data`, `user_data_labels` and `num_samples` (user
 names, user features, user labels if the problem is supervised, and number of
 samples for each user, respectively). These attributes are required to have

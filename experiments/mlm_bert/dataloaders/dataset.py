@@ -1,33 +1,50 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
-from torch.utils.data import Dataset
+from core.dataset import BaseDataset
+from transformers import AutoTokenizer
 from utils import print_rank
 import logging
 import json
 import itertools
 
-class TextDataset(Dataset):
+class Dataset(BaseDataset):
     """
     Map a text source to the target text
     """
-    def __init__(self, data, args, tokenizer, test_only=False, user_idx=None, max_samples_per_user=-1, min_words_per_utt=5):
+
+    def __init__(self, data, args, tokenizer=None, test_only=False, user_idx=0, max_samples_per_user=-1, min_words_per_utt=5, **kwargs):
+
         self.utt_list = list()
         self.test_only= test_only
         self.padding = args.get('padding', True)
         self.max_seq_length= args['max_seq_length']
         self.max_samples_per_user = max_samples_per_user
         self.min_num_words = min_words_per_utt
-        self.tokenizer = tokenizer
         self.process_line_by_line=args.get('process_line_by_line', False)
         self.user = None
 
+        if tokenizer != None:
+            self.tokenizer = tokenizer
+        else:
+            tokenizer_kwargs = {
+                    "cache_dir": args['cache_dir'],
+                    "use_fast": args['tokenizer_type_fast'],
+                    "use_auth_token":  None
+                }                     
+        
+            if 'tokenizer_name' in args:
+                self.tokenizer = AutoTokenizer.from_pretrained(args['tokenizer_name'], **tokenizer_kwargs)
+            elif 'model_name_or_path' in args:
+                self.tokenizer = AutoTokenizer.from_pretrained(args['model_name_or_path'], **tokenizer_kwargs)
+            else:
+                raise ValueError("You are instantiating a new tokenizer from scratch. This is not supported by this script.")
 
         if self.max_seq_length is None:
             self.max_seq_length = self.tokenizer.model_max_length
             if self.max_seq_length > 512:
                 print_rank(
-                    f"The tokenizer picked seems to have a very large `model_max_length` ({tokenizer.model_max_length}). "
+                    f"The tokenizer picked seems to have a very large `model_max_length` ({self.tokenizer.model_max_length}). "
                     "Picking 512 instead. You can change that default value by passing --max_seq_length xxx.", loglevel=logging.DEBUG
                 )
                 self.max_seq_length = 512
@@ -39,7 +56,7 @@ class TextDataset(Dataset):
                 )
             self.max_seq_length = min(self.max_seq_length, self.tokenizer.model_max_length)
 
-        self.read_data(data, user_idx)
+        self.load_data(data, user_idx)
 
         if not self.process_line_by_line:
             self.post_process_list()
@@ -65,7 +82,7 @@ class TextDataset(Dataset):
             return self.utt_list[idx]
 
 
-    def read_data(self, orig_strct, user_idx):
+    def load_data(self, orig_strct, user_idx):
         """ Reads the data for a specific user (unless it's for val/testing) and returns a 
         list of embeddings and targets."""
 
@@ -85,7 +102,6 @@ class TextDataset(Dataset):
             self.user = self.user_list[user_idx]
             self.process_x(self.user_data[self.user])
 
-
     def process_x(self, raw_x_batch):
 
         if self.test_only:
@@ -100,7 +116,6 @@ class TextDataset(Dataset):
             self.utt_list = [{'src_text': 'N/A', 'duration': 0, 'loss_weight': 1.0}]
 
         print_rank('Processing json-structure for User: {} Utterances Processed: {}'.format(self.user, len(self.utt_list)), loglevel=logging.INFO)
-
 
     def process_user(self, user, user_data):
         counter=0

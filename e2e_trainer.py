@@ -22,7 +22,7 @@ from core import federated
 from core.config import FLUTEConfig
 from core.server import select_server
 from core.client import Client
-from core.globals import TRAINING_FRAMEWORK_TYPE, logging_level, define_file_type
+from core.globals import TRAINING_FRAMEWORK_TYPE, logging_level
 from experiments import make_model
 from utils import (
     make_optimizer,
@@ -88,7 +88,6 @@ def run_worker(model_path, config, task, data_path, local_rank):
     """
     model_config = config["model_config"]
     server_config = config["server_config"]
-    define_file_type(data_path, config, task)
 
     # Get the rank on MPI
     rank = local_rank if local_rank > -1 else federated.rank()
@@ -108,11 +107,12 @@ def run_worker(model_path, config, task, data_path, local_rank):
             print_rank('Server data preparation')
 
             # pre-cache the training data and capture the number of clients for sampling
-            training_filename = os.path.join(data_path, config["client_config"]["data_config"]["train"]["list_of_train_data"])
-            config["server_config"]["data_config"]["num_clients"] = Client.get_num_users(training_filename)
-            data_config = config['server_config']['data_config']
+            client_train_config = config["client_config"]["data_config"]["train"]
+            num_clients, train_dataset = Client.get_train_dataset(data_path, client_train_config,task)
+            config["server_config"]["data_config"]["num_clients"] = num_clients
 
             # Make the Dataloaders
+            data_config = config['server_config']['data_config']
             if 'train' in data_config:
                 server_train_dataloader = make_train_dataloader(data_config['train'], data_path, task=task, clientx=None)
             else:
@@ -142,6 +142,7 @@ def run_worker(model_path, config, task, data_path, local_rank):
                 data_path,
                 model_path,
                 server_train_dataloader,
+                train_dataset,
                 val_dataloader,
                 test_dataloader,
                 config,

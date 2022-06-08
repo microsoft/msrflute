@@ -7,13 +7,12 @@ workers 1 to N for processing a given client's data. It's main method is the
 '''
 
 import copy
-import json
 import logging
 import os
 import time
 from easydict import EasyDict as edict
 
-import h5py
+from importlib.machinery import SourceFileLoader
 import numpy as np
 import torch
 
@@ -47,13 +46,6 @@ import extensions.privacy
 from extensions.privacy import metrics as privacy_metrics
 from experiments import make_model
 
-
-# A per-process cache of the training data, so clients don't have to repeatedly re-load
-# TODO: deprecate this in favor of passing dataloader around
-_data_dict = None
-_file_ext = None
-
-
 class Client:
     # It's unclear why, but sphinx refuses to generate method docs
     # if there is no docstring for this class.
@@ -72,9 +64,9 @@ class Client:
                 training data for the client.
         '''
         super().__init__()
-
+        
         self.client_id = client_id
-        self.client_data = self.get_data(client_id,dataloader)
+        self.client_data = self.get_data(client_id, dataloader)
         self.config = copy.deepcopy(config)
         self.send_gradients = send_gradients
 
@@ -83,112 +75,45 @@ class Client:
         return self.client_id, self.client_data, self.config, self.send_gradients
 
     @staticmethod
-    def get_num_users(filename):
-        '''Count users given a JSON or HDF5 file.
-
-        This function will fill the global data dict. Ideally we want data
-        handling not to happen here and only at the dataloader, that will be the
-        behavior in future releases.
+    def get_train_dataset(data_path, client_train_config, task):
+        '''This function will obtain the training dataset for all
+        users.
 
         Args:
-            filename (str): path to file containing data.
+            data_path (str): path to file containing taining data.
+            client_train_config (dict): trainig data config.
         '''
 
-        global _data_dict
-        global _file_ext
-        _file_ext = filename.split('.')[-1]
-        
         try:
-            if _file_ext == 'json' or _file_ext == 'txt':
-                if _data_dict is None:
-                    print_rank('Reading training data dictionary from JSON')
-                    with open(filename,'r') as fid:
-                        _data_dict = json.load(fid)  # pre-cache the training data
-                    _data_dict = scrub_empty_clients(_data_dict)  # empty clients MUST be scrubbed here to match num_clients in the entry script
-                    print_rank('Read training data dictionary', loglevel=logging.DEBUG)
-
-            elif _file_ext == 'hdf5':
-                print_rank('Reading training data dictionary from HDF5')
-                _data_dict = h5py.File(filename, 'r')
-                print_rank('Read training data dictionary', loglevel=logging.DEBUG)
-        
+            dir = os.path.join('experiments',task,'dataloaders','dataset.py')
+            loader = SourceFileLoader("Dataset",dir).load_module()
+            dataset = loader.Dataset
+            train_file = os.path.join(data_path, client_train_config['list_of_train_data']) if client_train_config['list_of_train_data'] != None else None
+            train_dataset = dataset(train_file,  args=client_train_config)
+            num_users = len(train_dataset.user_list)
+            print_rank("Total amount of training users: {}".format(num_users))
         except:
-            raise ValueError('Error reading training file. Please make sure the format is allowed')
+            print_rank("Dataset not found, please make sure is located inside the experiment folder")
 
-        num_users = len(_data_dict['users'])
-        return num_users
+        return num_users, train_dataset
 
     @staticmethod
-    def get_data(client_id, dataloader):
-        '''Load data from the dataloader given the client's id.
+    def get_data(clients, dataset):
+        ''' Create training dictionary'''
 
-        This function will load the global data dict. Ideally we want data
-        handling not to happen here and only at the dataloader, that will be the
-        behavior in future releases.
-
-        Args:
-            client_id (int or list): identifier(s) for grabbing client's data.
-            dataloader (torch.utils.data.DataLoader): dataloader that
-                provides the trianing 
-        '''
-
-        # Auxiliary function for decoding only when necessary
-        decode_if_str = lambda x: x.decode() if isinstance(x, bytes) else x
-
-        # During training, client_id will be always an integer
-        if isinstance(client_id, int):
-            user_name = decode_if_str(_data_dict['users'][client_id])
-            num_samples = _data_dict['num_samples'][client_id]
-            
-            if _file_ext == 'hdf5':
-                arr_data = [decode_if_str(e) for e in _data_dict['user_data'][user_name]['x'][()]]
-                user_data = {'x': arr_data}
-            elif _file_ext == 'json' or _file_ext == 'txt':
-                user_data = _data_dict['user_data'][user_name]
-
-            if 'user_data_label' in _data_dict:  # supervised problem
-                labels = _data_dict['user_data_label'][user_name]
-                if _file_ext == 'hdf5':  # transforms HDF5 Dataset into Numpy array
-                    labels = labels[()]
-
-                return edict({'users': [user_name],
-                        'user_data': {user_name: user_data},
-                        'num_samples': [num_samples],
-                        'user_data_label': {user_name: labels}})
-            else:
-                print_rank('no labels present, unsupervised problem', loglevel=logging.DEBUG)
-                return edict({'users': [user_name],
-                        'user_data': {user_name: user_data},
-                        'num_samples': [num_samples]})
-
-        # During validation and test, client_id might be a list of integers
-        elif isinstance(client_id, list):
-            if 'user_data_label' in _data_dict:
-                users_dict = {'users': [], 'num_samples': [], 'user_data': {}, 'user_data_label': {}}
-            else:
-                users_dict = {'users': [], 'num_samples': [], 'user_data': {}}
+        data_with_labels = hasattr(dataset,"user_data_label")
+        input_strct = {'users': [], 'num_samples': [],'user_data': dict(), 'user_data_label': dict()} if data_with_labels else {'users': [], 'num_samples': [],'user_data': dict()}
         
-            for client in client_id:
-                user_name = decode_if_str(dataloader.dataset.user_list[client])
-                users_dict['users'].append(user_name)
-                users_dict['num_samples'].append(dataloader.dataset.num_samples[client])
+        for client in clients:
+            user = dataset.user_list[client]
+            input_strct['users'].append(user)
+            input_strct['num_samples'].append(dataset.num_samples[client])
+            input_strct['user_data'][user]= dataset.user_data[user]
+            if data_with_labels: 
+                input_strct['user_data_label'][user] = dataset.user_data_label[user]
 
-                if _file_ext == 'hdf5':
-                    arr_data = dataloader.dataset.user_data[user_name]['x']
-                    arr_decoded = [decode_if_str(e) for e in arr_data]
-                    users_dict['user_data'][user_name] = {'x': arr_decoded}
-                elif _file_ext == 'json':
-                    users_dict['user_data'][user_name] = {'x': dataloader.dataset.user_data[user_name]['x']}
-                elif _file_ext == 'txt':  # using a different line for .txt since our files have a different structure
-                    users_dict['user_data'][user_name] = dataloader.dataset.user_data[user_name]
+        return edict(input_strct)
 
-                if 'user_data_label' in _data_dict:
-                    labels = dataloader.dataset.user_data_label[user_name]
-                    if _file_ext == 'hdf5':
-                        labels = labels[()]
-                    users_dict['user_data_label'][user_name] = labels
-                    
-            return users_dict
 
     @staticmethod
     def run_testvalidate(client_data, server_data, mode, model):
@@ -285,32 +210,14 @@ class Client:
         print_rank(f'Client successfully instantiated strategy {strategy}', loglevel=logging.DEBUG)
 
         begin = time.time()  
-        client_stats = {}      
-        
-        # Update the location of the training file
-        data_config['list_of_train_data'] = os.path.join(data_path, data_config['list_of_train_data'])
+        client_stats = {}  
 
         user = data_strct['users'][0]
-        if 'user_data_label' in data_strct.keys():  # supervised case
-            input_strct = edict({
-                'users': [user],
-                'user_data': {user: data_strct['user_data'][user]},
-                'num_samples': [data_strct['num_samples'][0]],
-                'user_data_label': {user: data_strct['user_data_label'][user]}
-            })
-        else:
-            input_strct = edict({
-                'users': [user],
-                'user_data': {user: data_strct['user_data'][user]},
-                'num_samples': [data_strct['num_samples'][0]]
-            })
-
         print_rank('Loading : {}-th client with name: {}, {} samples, {}s elapsed'.format(
-            client_id, user, data_strct['num_samples'][0], time.time() - begin), loglevel=logging.INFO)
+            client_id[0], user, data_strct['num_samples'][0], time.time() - begin), loglevel=logging.INFO)
 
         # Get dataloaders
-        train_dataloader = make_train_dataloader(data_config, data_path, task=task, clientx=0, data_strct=input_strct)
-        val_dataloader   = make_val_dataloader(data_config, data_path)
+        train_dataloader = make_train_dataloader(data_config, data_path, task=task, clientx=0, data_strct=data_strct)
 
         # Instantiate the model object
         if model is None:
@@ -349,7 +256,6 @@ class Client:
             optimizer=optimizer,
             ss_scheduler=ss_scheduler,
             train_dataloader=train_dataloader,
-            val_dataloader=val_dataloader,
             server_replay_config =client_config,
             max_grad_norm=client_config['data_config']['train'].get('max_grad_norm', None),
             anneal_config=client_config['annealing_config'] if 'annealing_config' in client_config else None,
@@ -386,7 +292,7 @@ class Client:
 
         # This is where training actually happens
         train_loss, num_samples = trainer.train_desired_samples(desired_max_samples=desired_max_samples, apply_privacy_metrics=apply_privacy_metrics)
-        print_rank('client={}: training loss={}'.format(client_id, train_loss), loglevel=logging.DEBUG)
+        print_rank('client={}: training loss={}'.format(client_id[0], train_loss), loglevel=logging.DEBUG)
 
         # Estimate gradient magnitude mean/var
         # Now computed when the sufficient stats are updated.

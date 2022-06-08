@@ -60,7 +60,6 @@ server_config:
     data_config:                    # Server-side data configuration
         val:                        # Validation data
             batch_size: 2048
-            loader_type: text
             tokenizer_type: not_applicable
             prepend_datapath: false
             val_data: <add path to data here>       # Path for validation data
@@ -92,7 +91,6 @@ server_config:
         #     unsorted_batch: true
         test:                                       # Test data configuration
             batch_size: 2048
-            loader_type: text
             tokenizer_type: not_applicable
             prepend_datapath: false
             train_data: null
@@ -130,7 +128,6 @@ client_config:
     data_config:
         train:                                          # This is the main training data configuration
             batch_size: 64
-            loader_type: text
             tokenizer_type: not_applicable
             prepend_datapath: false
             list_of_train_data: <add path to data here> # Path to training data

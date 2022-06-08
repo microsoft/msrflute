@@ -4,12 +4,12 @@
 import random
 import torch
 import numpy as np
-from torch.utils.data import DataLoader
+from core.dataloader import BaseDataLoader
 from torch.utils.data.distributed import DistributedSampler
-from experiments.nlg_gru.dataloaders.text_dataset import TextDataset
+from experiments.nlg_gru.dataloaders.dataset import Dataset
 from utils.data_utils import BatchSampler, DynamicBatchSampler
 
-class TextDataLoader(DataLoader):
+class DataLoader(BaseDataLoader):
     """
     PyTorch dataloader for loading text data from
     text_dataset.
@@ -20,7 +20,7 @@ class TextDataLoader(DataLoader):
         self.batch_size = args['batch_size']
         batch_sampler = None
 
-        dataset = TextDataset(
+        dataset = Dataset(
                         data   = kwargs['data'],
                         test_only    = not mode=="train",
                         vocab_dict   = args['vocab_dict'],
@@ -60,11 +60,6 @@ class TextDataLoader(DataLoader):
                              num_workers=num_workers,
                              collate_fn=self.collate_fn,
                              pin_memory=args["pin_memory"])
-
-
-    def create_loader(self):
-        return self
-        
 
     def collate_fn(self, batch):
         def pad_and_concat_feats(labels):

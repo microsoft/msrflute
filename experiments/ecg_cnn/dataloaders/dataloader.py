@@ -1,17 +1,17 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
-from experiments.ecg_cnn.dataloaders.text_dataset import TextDataset
+from experiments.ecg_cnn.dataloaders.dataset import Dataset
+from core.dataloader import BaseDataLoader
 
 import torch
-from torch.utils.data import DataLoader
 
-class TextDataLoader(DataLoader):
+class DataLoader(BaseDataLoader):
     def __init__(self, mode, num_workers=0, **kwargs):
         args = kwargs['args']
         self.batch_size = args['batch_size']
 
-        dataset = TextDataset(
+        dataset = Dataset(
             data=kwargs['data'],
             test_only=(not mode=='train'),
             user_idx=kwargs.get('user_idx', None),
@@ -25,9 +25,6 @@ class TextDataLoader(DataLoader):
             num_workers=num_workers,
             collate_fn=self.collate_fn,
         )
-
-    def create_loader(self):
-        return self
 
     def collate_fn(self, batch):
         x, y = list(zip(*batch))

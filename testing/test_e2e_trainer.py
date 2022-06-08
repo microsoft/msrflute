@@ -60,12 +60,14 @@ def test_mlm_bert():
     data_path, output_path, config_path = get_info(task)
     assert run_pipeline(data_path, output_path, config_path, task)==0
     print("PASSED")
-    
+
+@pytest.mark.xfail
 def test_classif_cnn():  
     
     task = 'classif_cnn'
     data_path, output_path, config_path = get_info(task)
     assert run_pipeline(data_path, output_path, config_path, task)==0
+    print("PASSED")
 
 def test_ecg_cnn():  
     

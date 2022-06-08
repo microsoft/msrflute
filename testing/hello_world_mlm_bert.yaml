@@ -60,7 +60,6 @@ server_config:
     num_clients_per_iteration: 2                  # Number of clients sampled per round
     data_config:                                    # Server-side data configuration
         val:                                        # Validation data
-            loader_type: text
             val_data: data/mlm_bert/val_data.txt
             task: mlm
             mlm_probability: 0.25
@@ -82,7 +81,6 @@ server_config:
         #     train_data_server: null
         #     desired_max_samples: null
         test:                                       # Test data configuration
-            loader_type: text
             test_data: data/mlm_bert/test_data.txt
             task: mlm
             mlm_probability: 0.25
@@ -112,7 +110,6 @@ client_config:
     do_profiling: false                             # Enables client-side training profiling
     data_config:
         train:                                      # This is the main training data configuration
-            loader_type: text
             list_of_train_data: data/mlm_bert/train_data.txt
             task: mlm
             mlm_probability: 0.25
