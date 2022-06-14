@@ -10,8 +10,8 @@ import copy
 import logging
 import os
 import time
-from easydict import EasyDict as edict
 
+from easydict import EasyDict as edict
 from importlib.machinery import SourceFileLoader
 import numpy as np
 import torch
@@ -33,8 +33,9 @@ from utils import (
     ScheduledSamplingScheduler,
     make_optimizer,
     print_rank,
-    scrub_empty_clients,
     to_device,
+    convex_inference,
+    alpha_update,
 )
 from utils.dataloaders_utils import (
     make_train_dataloader,
@@ -138,6 +139,7 @@ class Client:
         _, data_strct, config, _ = client_data
         _, model_parameters = server_data
         config = copy.deepcopy(config)
+        model_path = config["model_path"]
 
         begin = time.time()  
 
@@ -161,14 +163,47 @@ class Client:
             p.data = data.detach().clone().cuda() if torch.cuda.is_available() else data.detach().clone()
         print_rank(f'Model setup complete. {time.time() - begin}s elapsed.', loglevel=logging.DEBUG)
 
+        # Compute output and metrics on the test or validation data
         num_instances = sum(data_strct['num_samples'])
         print_rank(f'Validating {num_instances}', loglevel=logging.DEBUG)
-
-        # Compute output and metrics on the test or validation data
         output, metrics = run_validation_generic(model, dataloader)
+        
+        # Load local model if necessary
+        if config['server_config']['type']=='personalization':
+
+            local_model = make_model(config['model_config'])
+            user = data_strct['users'][0]
+
+            local_model_name = os.path.join(model_path, user + '_model.tar')
+
+            if os.path.exists(local_model_name):
+                print_rank('Loading Local Model .. {}'.format(local_model_name))
+                checkpoint = torch.load(local_model_name)
+                local_model.load_state_dict(checkpoint["model_state_dict"])
+
+                local_alpha_name = os.path.join(model_path, user + '_alpha')
+                if os.path.exists(local_alpha_name):
+                    alpha = torch.load(local_alpha_name)
+                    print_rank('Loading Alpha Weight from {}: Value={}'.format(local_model_name, alpha))
+
+                    # Run inference and get logits back
+                    if mode == 'test':
+                        dataloader = make_test_dataloader(data_config, data_path=None, task=config['server_config']['task'], data_strct=data_strct)
+                    elif mode == 'val':
+                        dataloader = make_val_dataloader(data_config, data_path=None, task=config['server_config']['task'], data_strct=data_strct)
+
+                    output_local, local_metrics = run_validation_generic(local_model, dataloader)
+                    loss_local = local_metrics['loss']['value']
+                    cer = local_metrics['acc']['value']
+                    # Combine logits
+                    cer =convex_inference(output, output_local, alpha=alpha)
+                    metrics['loss']['value'] = (metrics['loss']['value'] + loss_local) / 2 
+                    metrics['acc']['value'] = cer
         output = None if not want_logits else output
 
         return output, metrics, num_instances
+
+
 
     @staticmethod
     def process_round(client_data, server_data, model, data_path, eps=1e-7):
@@ -204,6 +239,7 @@ class Client:
         task = client_config.get('task', {})
         trainer_config = client_config.get('trainer_config', {})
         privacy_metrics_config = config.get('privacy_metrics_config', None)
+        model_path = config["model_path"]
 
         StrategyClass = select_strategy(config['strategy'])
         strategy = StrategyClass('client', config)
@@ -308,6 +344,65 @@ class Client:
             p.grad = data - p.data
 
         payload = strategy.generate_client_payload(trainer) if send_gradients else None
+
+        if config['server_config']['type'] == 'personalization':
+            # Initialize convex weight alpha
+            alpha= config['client_config'].get('convex_model_interp', 0.75)
+            local_model = make_model(config['model_config'])
+            train_dataloader = make_train_dataloader(data_config, data_path, task=task, clientx=0, data_strct=data_strct)
+            local_optimizer = make_optimizer(client_config['optimizer_config'], local_model)
+
+            # Make the trainer
+            local_trainer = Trainer(
+                model=local_model,
+                optimizer=local_optimizer,
+                ss_scheduler=ss_scheduler,
+                train_dataloader=train_dataloader,
+                server_replay_config=client_config,
+                max_grad_norm=client_config['data_config']['train'].get('max_grad_norm', None),
+                anneal_config=client_config['annealing_config'] if 'annealing_config' in client_config else None,
+                num_skips_threshold=client_config[
+                    'num_skips_threshold'] if 'num_skips_threshold' in client_config else -1,
+                ignore_subtask=client_config['ignore_subtask']
+            )
+
+            local_model_name = os.path.join(model_path, user + '_model.tar')
+            local_alpha_name = os.path.join(model_path, user + '_alpha')
+
+            if os.path.exists(local_model_name):
+                print_rank('Loading Local Model .. {}'.format(local_model_name))
+                local_trainer.load(local_model_name, update_lr_scheduler=False, update_ss_scheduler=False)
+
+            if os.path.exists(local_alpha_name):
+                print_rank('Loading Alpha Weight .. {}'.format(local_model_name), loglevel=logging.INFO)
+                alpha = torch.load(local_alpha_name)
+
+            # Copy original model
+            original_local_model = local_trainer.get_model()
+
+            # Training begins here
+            local_trainer.model.train()
+            local_trainer.model.zero_grad()
+
+            # Run Local Processing
+            train_loss, num_samples = local_trainer.train_desired_samples(desired_max_samples=desired_max_samples,
+                                                                          apply_privacy_metrics=False)
+            print_rank('client={}, user:{}: LOCAL training loss={}'.format(client_id[0], user, train_loss), loglevel=logging.INFO)
+
+            local_trainer.save(
+                model_path=model_path,
+                config=config,
+                token=user)
+
+            # Estimate the pseudo-gradient for local model
+            for p, orig_param in zip(local_trainer.model.parameters(), original_local_model.parameters()):
+                orig_param = orig_param.cuda() if torch.cuda.is_available() else orig_param
+                p.grad = orig_param.data - p.data
+
+            alpha= alpha_update(local_trainer.model, trainer.model, alpha, initial_lr)
+            torch.save(alpha, local_alpha_name)
+            local_trainer.model.zero_grad()
+
 
         # Mark that training (including post-processing) is finished
         end = time.time()

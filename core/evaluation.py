@@ -34,6 +34,7 @@ class Evaluation():
         self.process_testvalidate = process_testvalidate
         self.test_dataloader = val_dataloader
         self.val_dataloader = test_dataloader
+        self.server_type = config['server_config']['type']
 
         super().__init__()
     
@@ -177,17 +178,20 @@ class Evaluation():
         current_users_idxs = list()
         current_total = 0
 
-        # Accumulate users until a threshold is reached to form client
-        for i in range(len(dataloader.dataset.user_list)):
-            current_users_idxs.append(i)
-            count = dataloader.dataset.num_samples[i]
-            current_total += count
-            if current_total > threshold:
-                print_rank(f'sending {len(current_users_idxs)} users', loglevel=logging.DEBUG)
-                yield Client(current_users_idxs, self.config, False, dataloader.dataset)
-                current_users_idxs = list() 
-                current_total = 0
+        if self.server_type == "personalization":  
+            for i in range(len(dataloader.dataset.user_list)):
+                yield Client([i], self.config, False, dataloader.dataset)
+        else:
+            for i in range(len(dataloader.dataset.user_list)):
+                current_users_idxs.append(i)
+                count = dataloader.dataset.num_samples[i]
+                current_total += count
+                if current_total > threshold:
+                    print_rank(f'sending {len(current_users_idxs)} users', loglevel=logging.DEBUG)
+                    yield Client(current_users_idxs, self.config, False, dataloader.dataset)
+                    current_users_idxs = list() 
+                    current_total = 0
 
-        if len(current_users_idxs) != 0:
-            print_rank(f'sending {len(current_users_idxs)} users -- residual', loglevel=logging.DEBUG)
-            yield Client(current_users_idxs, self.config, False, dataloader.dataset)
+            if len(current_users_idxs) != 0:
+                print_rank(f'sending {len(current_users_idxs)} users -- residual', loglevel=logging.DEBUG)
+                yield Client(current_users_idxs, self.config, False, dataloader.dataset)

@@ -57,8 +57,7 @@ def make_train_dataloader(data_config, data_path, clientx, task=None, vec_size=3
 
 def make_val_dataloader(data_config, data_path, task=None, data_strct=None, train_mode=False):
     """ Return a data loader for a validation set """
-    if train_mode:
-        return None
+
     DataLoader = get_exp_dataloader(task)
     val_file = os.path.join(data_path, data_config["val_data"]) if data_config["val_data"] != None and data_path != None else None
     val_dataloader = DataLoader(data = data_strct if data_strct is not None else val_file,

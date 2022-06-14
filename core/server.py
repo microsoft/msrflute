@@ -585,7 +585,7 @@ class OptimizationServer(federated.Server):
                 self.server_trainer.model = self.worker_trainer.model  # make sure that the models are in sync
 
 
-def select_server(server_type, config):
+def select_server(server_type):
     '''Select a server type using different possible strings.
 
     Right now this just returns `OptimizationServer`, but this
@@ -597,4 +597,8 @@ def select_server(server_type, config):
         config (dict): config parsed from YAML, passed so that
             parameters can be used to select a given server.
     '''
-    return OptimizationServer
+    if server_type == "personalization":
+        from experiments.cv.server import PersonalizationServer
+        return PersonalizationServer
+    else:
+        return OptimizationServer

@@ -133,7 +133,7 @@ def run_worker(model_path, config, task, data_path, local_rank):
                 model.load_state_dict(model_state_dict)
 
             server_type = server_config["type"]
-            server_setup = select_server(server_type, config)  # Return the server class
+            server_setup = select_server(server_type)  # Return the server class
             server = server_setup(
                 data_config["num_clients"],
                 model,
@@ -215,6 +215,7 @@ if __name__ == "__main__":
         config = FLUTEConfig.from_dict(cfg_dict)
         config["data_path"] = data_path
         config["output_path"] = args.outputPath
+        config["model_path"]= model_path
         config["experiment_name"] = experiment_name
         config["client_config"]["task"] = task
         config["server_config"]["task"] = task

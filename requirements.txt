@@ -13,4 +13,6 @@ azureml-defaults
 pyyaml
 sklearn
 cerberus
+protobuf
+sentencepiece
 googledrivedownloader

@@ -4,6 +4,7 @@
 import logging
 import os
 import re
+import copy 
 
 import numpy as np
 import torch
@@ -402,6 +403,9 @@ class Trainer(TrainerBase):
 
         return num_samples, sum_train_loss
 
+    def get_model(self):
+        return copy.deepcopy(self.model)
+
     def prepare_iteration(self, model=None):
         """Steps to run before iteration begins."""
 
@@ -430,6 +434,42 @@ class Trainer(TrainerBase):
         self.lr_scheduler = None
         if annealing_config is not None:
             self.lr_scheduler = make_lr_scheduler(annealing_config, self.optimizer)
+
+    def save(self, model_path, token=None, config=None):
+        """Save model to disk."""
+
+        save_model(
+            model_path=model_path,
+            config=config,
+            model=self.model,
+            optimizer=self.optimizer,
+            lr_scheduler=self.lr_scheduler,
+            ss_scheduler=self.ss_scheduler,
+            token=token
+        )
+
+    def load(self, save_path, update_lr_scheduler, update_ss_scheduler):
+        """Load model from disk.
+
+        If save_path is given, load from there. If not, then resume training
+        from current model dir.  If at any point the save_path is not present on
+        the disk, it won't be loaded.
+        """
+
+        if os.path.isfile(save_path):
+            print_rank("Loading checkpoint: {}".format(save_path))
+            checkpoint = torch.load(save_path)
+            self.model.load_state_dict(checkpoint["model_state_dict"])
+            if self.optimizer is not None:
+                self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+
+            anl_st_dict = checkpoint.get("lr_scheduler_state_dict")
+            if anl_st_dict and self.lr_scheduler is not None and update_lr_scheduler is True:
+                self.lr_scheduler.load_state_dict(anl_st_dict)
+
+            sss_st_dict = checkpoint.get("ss_scheduler_state_dict")
+            if sss_st_dict and self.ss_scheduler is not None and update_lr_scheduler is True:
+                self.ss_scheduler.load_state_dict(sss_st_dict)
 
 
 def run_validation_generic(model, val_dataloader):

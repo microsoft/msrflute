@@ -1,0 +1,62 @@
+model_config:
+    model_type: resnet50 #vgg11                                  # class w/ `loss` and `inference` methods
+    model_folder: experiments/cv/model.py              # file containing class
+    num_classes: 10
+
+dp_config:
+    enable_local_dp: false                             # whether to enable user-level DP
+
+privacy_metrics_config:
+    apply_metrics: false                               # cache data to compute additional metrics
+
+strategy: DGA
+
+server_config:
+    wantRL: false                                      # whether to use RL-based meta-optimizers
+    resume_from_checkpoint: false                      # restart from checkpoint if file exists
+    do_profiling: false                                # run profiler and compute runtime metrics
+    save_to_disk: false                                # save the updated dataset in disk
+    optimizer_config:                                  # this is the optimizer used to update the model
+        type: adam
+        lr: 0.001
+    annealing_config:                                  # annealer for the learning rate
+        type: step_lr
+        step_interval: epoch
+        gamma: 1.00
+        step_size: 100
+    val_freq: 1000                                       # how many iterations between metric eval on val set
+    rec_freq: 5                                       # how many iterations between metric eval on test set
+    initial_val: False
+    initial_rec: True
+    max_iteration: 1000                                # how many iterations in total
+    num_clients_per_iteration: 10                      # how many clients per iteration
+    total_num_clients: 100
+    data_config:                                       # where to get val and test data from
+        val:
+            batch_size: 128
+            val_data: null
+        test:
+            batch_size: 128
+            test_data: null
+    type: personalization                              # Options: personalization | model_optimization
+    aggregate_median: softmax                          # how aggregations weights are computed
+    softmax_beta: 20.0
+    initial_lr_client: 1.0                             # learning rate used on client optimizer
+    lr_decay_factor: 1.0
+    weight_train_loss: train_loss
+    best_model_criterion: loss
+    fall_back_to_best_model: false
+
+client_config:
+    do_profiling: false                                # run profiling and compute runtime metrics
+    ignore_subtask: false
+    convex_model_interp: 0.75                          # This is specific to personalization server/client
+    data_config:                                       # where to get training data from
+        train:
+            batch_size: 128
+            list_of_train_data: null
+            desired_max_samples: 50000
+    optimizer_config:                                  # this is the optimizer used by the client
+        type: sgd
+        lr: 0.001                                        # this is overridden by `initial_lr_client`
+    type: optimization

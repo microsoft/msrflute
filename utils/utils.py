@@ -600,3 +600,27 @@ def compute_grad_cosines(grads, model_grad):
             m2 += torch.mul(p2, p2).sum().item()
         return tot / (np.sqrt(g2) * np.sqrt(m2)) if g2 > 0 and m2 > 0 else 0
     return [compute_cosine(g, model_grad) for g in grads]
+
+# Personalization Routines
+def convex_inference(model_global, model_personal, alpha):
+    """" Model interpolation """
+    targets= torch.tensor(model_global['labels'])
+    probs = alpha*model_personal['probabilities']+(1-alpha)*model_global['probabilities']
+    probs= torch.argmax(torch.tensor(probs), dim=1)
+    return torch.mean((probs == targets).float()).detach().cpu().item()
+
+def alpha_update(model_global, model_personal, alpha, eta):
+    """" Training convex model interpolation weight. """
+    grad_alpha = 0.0
+    for l_params, p_params in zip(model_global.parameters(), model_personal.parameters()):
+        dif = p_params.data - l_params.data
+        grad = alpha * p_params.grad + (1 - alpha) * l_params.grad
+        grad_alpha += dif.view(-1).T.dot(grad.view(-1))
+
+    grad_alpha += 0.02 * alpha
+    alpha_n = alpha - eta * grad_alpha
+    alpha_n = np.clip(alpha_n.detach().cpu().item(), 0.0001, 0.9999)
+
+    return alpha_n if np.isfinite(alpha_n) else 0.75
+
+
