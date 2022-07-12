@@ -1,10 +1,11 @@
-# Copyright (c) Microsoft Corporation.
-# Licensed under the MIT license.
-
 #!/usr/bin/env python3
 # Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
 
 """
+*Borrowed from Facebook Opacus, which in turn borrowed from Tensorflow Privacy.  
+*Facebook's original notice follows below.
+
+
 *Based on Google's TF Privacy:* https://github.com/tensorflow/privacy/blob/master/tensorflow_privacy/privacy/analysis/rdp_accountant.py.
 *Here, we update this code to Python 3, and optimize dependencies.*
 
