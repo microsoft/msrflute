@@ -80,7 +80,12 @@
 <h1>Adding New Scenarios<a class="headerlink" href="#adding-new-scenarios" title="Permalink to this headline">¶</a></h1>
 <section id="data-preparation">
 <h2>Data Preparation<a class="headerlink" href="#data-preparation" title="Permalink to this headline">¶</a></h2>
-<p>At this moment FLUTE only allows JSON and HDF5 files, and requires an specific formatting for the training data. Here is a sample data blob for language model training.</p>
+<p>FLUTE provides the abstract class <cite>BaseDataset</cite> inside <code class="docutils literal notranslate"><span class="pre">core/dataset.py</span></code> that can be used  to wrap
+any dataset and make it compatible with the platform. The dataset should be able to access all the data,
+and store it in the attributes <cite>user_list</cite>, <cite>user_data</cite>, <cite>num_samples</cite> and  <cite>user_data_labels</cite> (optional).
+These attributes are required to have these exact names. The abstract method <code class="docutils literal notranslate"><span class="pre">load_data</span> <span class="pre">()</span></code> should be
+used to instantiate/load the dataset and provide the training format required by FLUTE on-the-fly.
+Here is a sample data blob for language model training.</p>
 <div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="p">{</span><span class="w"></span>
 <span class="w">    </span><span class="nt">&quot;users&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;bert&quot;</span><span class="p">,</span><span class="s2">&quot;elmo&quot;</span><span class="p">],</span><span class="w"></span>
 <span class="w">    </span><span class="nt">&quot;user_data&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"></span>
@@ -117,7 +122,7 @@
 </section>
 <section id="add-the-model-to-flute">
 <h2>Add the model to FLUTE<a class="headerlink" href="#add-the-model-to-flute" title="Permalink to this headline">¶</a></h2>
-<p>FLUTE requires the model declaration framed in PyTorch, which must inhereit from the <cite>BaseModel</cite> class defined in <cite>core/model.py</cite>. The following methods should be overridden:</p>
+<p>FLUTE requires the model declaration framed in PyTorch, which must inhereit from the <cite>BaseModel</cite> class defined in <code class="docutils literal notranslate"><span class="pre">core/model.py</span></code>. The following methods should be overridden:</p>
 <blockquote>
 <div><ul class="simple">
 <li><p>__init__: model definition</p></li>
@@ -163,8 +168,8 @@
 <p>Once the model is ready, all mandatory files must be in a single folder inside ´{/experiments´. Please adjust your files with the following naming structure so FLUTE can be able to find all the scripts needed.</p>
 <div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>task_name
     <span class="p">|</span>---- dataloaders
-          <span class="p">|</span>---- text_dataloader.py
-          <span class="p">|</span>---- text_dataset.py
+          <span class="p">|</span>---- dataloader.py
+          <span class="p">|</span>---- dataset.py
     <span class="p">|</span>---- utils
           <span class="p">|</span>---- utils.py <span class="o">(</span><span class="k">if</span> needed<span class="o">)</span>
     <span class="p">|</span>---- model.py
@@ -207,12 +212,13 @@
 </section>
 <section id="create-the-configuration-file">
 <h2>Create the configuration file<a class="headerlink" href="#create-the-configuration-file" title="Permalink to this headline">¶</a></h2>
-<p>The configuration file will allow you to specify the setup in your experiment, such as the optimizer, learning rate, number of clients and so on. FLUTE requires the following 5 sections:</p>
+<p>The configuration file will allow you to specify the setup in your experiment, such as the optimizer, learning rate, number of clients and so on. FLUTE requires the following 6 sections:</p>
 <blockquote>
 <div><ul class="simple">
 <li><p>model_config: path an parameters (if needed) to initialize the model.</p></li>
 <li><p>dp_config: differential privacy setup.</p></li>
 <li><p>privacy_metrics_config: for cache data to compute additional metrics.</p></li>
+<li><p>strategy: defines the federated optimizer.</p></li>
 <li><p>server_config: determines all the server-side settings.</p></li>
 <li><p>client_config: dictates the learning parameters for client-side model updates.</p></li>
 </ul>
@@ -251,12 +257,10 @@
 <span class="w">    </span><span class="nt">data_config</span><span class="p">:</span><span class="w">                                       </span><span class="c1"># Information for the test/val dataloaders</span><span class="w"></span>
 <span class="w">        </span><span class="nt">val</span><span class="p">:</span><span class="w"></span>
 <span class="w">            </span><span class="nt">batch_size</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10000</span><span class="w"></span>
-<span class="w">            </span><span class="nt">loader_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">text</span><span class="w"></span>
-<span class="w">            </span><span class="nt">val_data</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">test_data.hdf5</span><span class="w"></span>
+<span class="w">            </span><span class="nt">val_data</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">test_data.hdf5</span><span class="w">                   </span><span class="c1"># Assign to null for data loaded on-the-fly</span><span class="w"></span>
 <span class="w">        </span><span class="nt">test</span><span class="p">:</span><span class="w"></span>
 <span class="w">            </span><span class="nt">batch_size</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10000</span><span class="w"></span>
-<span class="w">            </span><span class="nt">loader_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">text</span><span class="w"></span>
-<span class="w">            </span><span class="nt">test_data</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">test_data.hdf5</span><span class="w"></span>
+<span class="w">            </span><span class="nt">test_data</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">test_data.hdf5</span><span class="w">                  </span><span class="c1"># Assign to null for data loaded on-the-fly</span><span class="w"></span>
 <span class="w">    </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">model_optimization</span><span class="w">                           </span><span class="c1"># Server type (model_optimization is the only available for now)</span><span class="w"></span>
 <span class="w">    </span><span class="nt">aggregate_median</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">softmax</span><span class="w">                          </span><span class="c1"># How aggregations weights are computed</span><span class="w"></span>
 <span class="w">    </span><span class="nt">initial_lr_client</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.001</span><span class="w">                           </span><span class="c1"># Learning rate used on optimizer</span><span class="w"></span>
@@ -272,8 +276,7 @@
 <span class="w">    </span><span class="nt">data_config</span><span class="p">:</span><span class="w">                                       </span><span class="c1"># Information for the train dataloader</span><span class="w"></span>
 <span class="w">        </span><span class="nt">train</span><span class="p">:</span><span class="w"></span>
 <span class="w">            </span><span class="nt">batch_size</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">4</span><span class="w"></span>
-<span class="w">            </span><span class="nt">loader_type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">text</span><span class="w"></span>
-<span class="w">            </span><span class="nt">list_of_train_data</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">train_data.hdf5</span><span class="w"></span>
+<span class="w">            </span><span class="nt">list_of_train_data</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">train_data.hdf5</span><span class="w">        </span><span class="c1"># Assign to null for data loaded on-the-fly</span><span class="w"></span>
 <span class="w">            </span><span class="nt">desired_max_samples</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">50000</span><span class="w"></span>
 <span class="w">    </span><span class="nt">optimizer_config</span><span class="p">:</span><span class="w">                                  </span><span class="c1"># Optimizer used by the client</span><span class="w"></span>
 <span class="w">        </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sgd</span><span class="w"></span>
