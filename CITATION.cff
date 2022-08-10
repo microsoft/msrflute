@@ -1,0 +1,13 @@
+cff-version: 1.2.0
+message: "To cite Microsoft FLUTE in academic papers, please cite it as below."
+authors:
+  - name: "Microsoft Research"
+title: "FLUTE: Federated Learning Utilities for Testing and Experimentation"
+version: 1.0.0
+date-released: "2021-22-11"
+url: "https://github.com/microsoft/msrflute"
+license:
+ - MIT
+keywords:
+  - FLUTE
+  - federated learning
