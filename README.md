@@ -108,6 +108,7 @@ In particular, we use a DP accountant from another Microsoft repository, which i
 
 ```
 $ git submodule update --init --recursive
+$ cd utils
 $ cd dp-accountant
 $ python setup.py install
 $ ./bin/compute-dp-epsilon --help
