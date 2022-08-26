@@ -115,7 +115,7 @@ class Dataset(BaseDataset):
         if len(self.utt_list) == 0:
             self.utt_list = [{'src_text': 'N/A', 'duration': 0, 'loss_weight': 1.0}]
 
-        print_rank('Processing json-structure for User: {} Utterances Processed: {}'.format(self.user, len(self.utt_list)), loglevel=logging.INFO)
+        print_rank('Processing json-structure for User: {} Utterances Processed: {}'.format(self.user, len(self.utt_list)), loglevel=logging.DEBUG)
 
     def process_user(self, user, user_data):
         counter=0

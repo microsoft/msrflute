@@ -1,9 +1,9 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 '''
-The Client object is short-lived, instantiated inside of worker 0 and moved to
-workers 1 to N for processing a given client's data. It's main method is the
-`process_round` function, used to update the model given a client's data.
+The Client object is short-lived, instantiated inside workers 1 to N for 
+processing a given client's data. It's main method is the `process_round` 
+function, used to update the model given a client's data.
 '''
 
 import copy
@@ -17,12 +17,7 @@ import numpy as np
 import torch
 
 # Internal imports
-from core.globals import TRAINING_FRAMEWORK_TYPE
-if TRAINING_FRAMEWORK_TYPE == 'mpi':
-    import core.federated as federated
-else:
-    raise NotImplementedError('{} is not supported'.format(TRAINING_FRAMEWORK_TYPE))
-
+import core.federated as federated
 from .strategies import select_strategy
 from .trainer import (
     Trainer,
@@ -41,18 +36,20 @@ from utils.dataloaders_utils import (
     make_train_dataloader,
     make_val_dataloader,
     make_test_dataloader,
+    get_dataset,
 )
-
 import extensions.privacy
 from extensions.privacy import metrics as privacy_metrics
 from experiments import make_model
+
+global train_dataset
 
 class Client:
     # It's unclear why, but sphinx refuses to generate method docs
     # if there is no docstring for this class.
     """Client class for specifying individual client training tasks"""
 
-    def __init__(self, client_id, config, send_gradients, dataloader):
+    def __init__(self, client_id, config, send_gradients):
         '''
         Client side processing: computing gradients, update the model and send them back to the server
 
@@ -61,47 +58,38 @@ class Client:
             config (dict): dictionary with parameters loaded from config file.
             send_gradients (bool): if True, model gradients are sent back;
                 otherwise, model weights are sent back.
-            dataloader (torch.utils.data.DataLoader): dataloader that generates
-                training data for the client.
         '''
         super().__init__()
         
         self.client_id = client_id
-        self.client_data = self.get_data(client_id, dataloader)
         self.config = copy.deepcopy(config)
         self.send_gradients = send_gradients
 
-    def get_client_data(self):
+    def get_client_data(self, dataset=None):
         '''"Getter" method that returns all object's attributes at once.'''
-        return self.client_id, self.client_data, self.config, self.send_gradients
+
+        client_data = self.get_data(self.client_id, dataset)
+        return self.client_id, client_data, self.config, self.send_gradients
 
     @staticmethod
     def get_train_dataset(data_path, client_train_config, task):
-        '''This function will obtain the training dataset for all
+        '''This function will obtain the dataset for all training
         users.
 
         Args:
             data_path (str): path to file containing taining data.
             client_train_config (dict): trainig data config.
+            task (str): task name.
         '''
-
-        try:
-            dir = os.path.join('experiments',task,'dataloaders','dataset.py')
-            loader = SourceFileLoader("Dataset",dir).load_module()
-            dataset = loader.Dataset
-            train_file = os.path.join(data_path, client_train_config['list_of_train_data']) if client_train_config['list_of_train_data'] != None else None
-            train_dataset = dataset(train_file,  args=client_train_config)
-            num_users = len(train_dataset.user_list)
-            print_rank("Total amount of training users: {}".format(num_users))
-        except:
-            print_rank("Dataset not found, please make sure is located inside the experiment folder")
-
-        return num_users, train_dataset
+        global train_dataset
+        train_dataset = get_dataset(data_path, client_train_config, task, mode="train")
+        return len(train_dataset.user_list)
 
     @staticmethod
     def get_data(clients, dataset):
         ''' Create training dictionary'''
 
+        dataset = train_dataset if len(clients) ==1 else dataset # clients is an integer only for training mode
         data_with_labels = hasattr(dataset,"user_data_label")
         input_strct = {'users': [], 'num_samples': [],'user_data': dict(), 'user_data_label': dict()} if data_with_labels else {'users': [], 'num_samples': [],'user_data': dict()}
         
@@ -226,7 +214,7 @@ class Client:
 
         # Ensure the client is assigned to the correct GPU
         if torch.cuda.is_available() and torch.cuda.device_count() == federated.size():
-            torch.cuda.set_device(federated.local_rank())
+            torch.cuda.set_device(federated.rank())
 
         # Process inputs and initialize variables
         client_id, data_strct, config, send_gradients = client_data

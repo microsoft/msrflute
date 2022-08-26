@@ -44,10 +44,10 @@ example is provided in `config.yaml`.
 ## Running the experiment
 
 Finally, to launch the experiment, it suffices to launch the `e2e_trainer.py`
-script using MPI
+script using torch.distributed.
 
 ```
-mpiexec -n 4 python e2e_trainer.py -dataPath ./ -outputPath scratch -config experiments/classif_cnn/config.yaml -task cv
+python -m torch.distributed.run --nproc_per_node=4 e2e_trainer.py -dataPath ./ -outputPath scratch -config experiments/classif_cnn/config.yaml -task cv -backend gloo
 ```
 
 The `dataPath`, `outputPath` and `config` arguments should just specify the

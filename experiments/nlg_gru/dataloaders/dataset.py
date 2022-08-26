@@ -58,8 +58,9 @@ class Dataset(BaseDataset):
         self.num_samples = orig_strct['num_samples']
         self.user_data  = orig_strct['user_data'] 
         self.user = 'test_only' if self.test_only else self.user_list[user_idx]
-        
-        self.process_x(self.user_data)
+
+        if user_idx != -1:
+            self.process_x(self.user_data)
 
     def process_x(self, user_data):
         print_rank('Processing data-structure: {} Utterances expected'.format(sum(self.num_samples)), loglevel=logging.DEBUG)

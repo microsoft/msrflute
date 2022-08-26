@@ -18,18 +18,11 @@ from collections import OrderedDict
 from utils.optimizers.lars import LarsSGD
 from utils.optimizers.lamb import LAMB
 from utils.optimizers.adamW import AdamW
-from core.globals import TRAINING_FRAMEWORK_TYPE
 from easydict import EasyDict as edict
 from torch.optim.lr_scheduler import (
     StepLR, 
     MultiStepLR, 
     ReduceLROnPlateau )
-
-
-if TRAINING_FRAMEWORK_TYPE == 'mpi':
-    from mpi4py import MPI
-else:
-    raise NotImplementedError('Training framework is not yet supported')
 
 def make_optimizer(optimizer_config, model):
     """Initialization for optimizer."""

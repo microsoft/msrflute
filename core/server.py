@@ -19,11 +19,7 @@ import numpy as np
 import torch
 
 # Internal imports
-from core.globals import TRAINING_FRAMEWORK_TYPE
-if TRAINING_FRAMEWORK_TYPE == 'mpi':
-    import core.federated as federated
-else:
-    raise NotImplementedError('{} is not supported'.format(TRAINING_FRAMEWORK_TYPE))
+import core.federated as federated
 from core.evaluation import Evaluation
 from core.client import Client
 from .strategies import select_strategy
@@ -49,8 +45,8 @@ run = Run.get_context()
 
 
 class OptimizationServer(federated.Server):
-    def __init__(self, num_clients, model, optimizer, ss_scheduler, data_path, model_path, train_dataloader, train_dataset,
-                 val_dataloader, test_dataloader, config, config_server):
+    def __init__(self, num_clients, model, optimizer, ss_scheduler, data_path, model_path, server_train_dataloader,
+                 config, idx_val_clients, idx_test_clients):
         '''Implement Server's orchestration and aggregation.
 
         This is the main Server class, that actually implements orchestration
@@ -67,11 +63,10 @@ class OptimizationServer(federated.Server):
             ss_scheduler: scheduled sampling scheduler.
             data_path (str): points to where data is.
             model_path (str): points to where pretrained model is.
-            train_dataloader (torch.utils.data.DataLoader): dataloader for training
-            val_dataloader (torch.utils.data.DataLoader): dataloader for validation
-            test_dataloader (torch.utils.data.DataLoader): dataloader for test, can be None
+            server_train_dataloader (torch.utils.data.DataLoader): dataloader for training
             config (dict): JSON style configuration parameters
-            config_server: deprecated, kept for API compatibility only.
+            idx_val_clients (list): validation client ids
+            idx_test_clients (list): testing clients ids
         '''
 
         super().__init__()
@@ -92,7 +87,7 @@ class OptimizationServer(federated.Server):
         self.val_freq = server_config['val_freq']
         self.req_freq = server_config['rec_freq']
 
-        self.evaluation = Evaluation(config, model_path, self.process_testvalidate, val_dataloader, test_dataloader)
+        self.evaluation = Evaluation(config, model_path, self.process_testvalidate, idx_val_clients, idx_test_clients)
 
         # TODO: does this need to be adjusted for custom metrics?
         self.metrics = dict()
@@ -122,8 +117,8 @@ class OptimizationServer(federated.Server):
             model=model,
             optimizer=optimizer,
             ss_scheduler=ss_scheduler,
-            train_dataloader=train_dataloader if train_dataloader is not None else val_dataloader,
-            val_dataloader=val_dataloader,
+            train_dataloader=server_train_dataloader if server_train_dataloader is not None else None,
+            val_dataloader=None,
             max_grad_norm=max_grad_norm,
             anneal_config=server_config['annealing_config'],
             model_type=self.model_type,
@@ -133,8 +128,7 @@ class OptimizationServer(federated.Server):
         # Creating an instance for the server-side trainer (runs mini-batch SGD)
         self.server_replay_iterations = None
         self.server_trainer = None
-        self.train_dataset = train_dataset
-        if train_dataloader is not None:
+        if server_train_dataloader is not None:
             assert 'server_replay_config' in server_config, 'server_replay_config is not set'
             assert 'optimizer_config' in server_config[
                 'server_replay_config'], 'server-side replay training optimizer is not set'
@@ -145,7 +139,7 @@ class OptimizationServer(federated.Server):
                 model=model,
                 optimizer=None,
                 ss_scheduler=ss_scheduler,
-                train_dataloader=train_dataloader,
+                train_dataloader=server_train_dataloader,
                 server_replay_config=server_config['server_replay_config'],
                 val_dataloader=None,
                 max_grad_norm=server_config['server_replay_config']\
@@ -179,9 +173,6 @@ class OptimizationServer(federated.Server):
         self.spm_model = server_config['data_config']['test'].get('spm_model', None)
 
         self.do_profiling = server_config.get('do_profiling', False)
-
-        # Parallel processing
-        self.clients_in_parallel = config['client_config'].get('clients_in_parallel', None)
 
         StrategyClass = select_strategy(config['strategy'])
         self.strategy = StrategyClass('server', self.config, self.model_path)
@@ -230,7 +221,7 @@ class OptimizationServer(federated.Server):
             'secsPerClientFull': [],
             'secsPerRoundHousekeeping': [],
             'secsPerRoundTotal': [],
-            'mpiCosts': []
+            'communicationCosts': []
         }
 
         run.log('Max iterations', self.max_iteration)
@@ -304,15 +295,7 @@ class OptimizationServer(federated.Server):
                 #  Create the pool of clients -- sample from this pool to assign to workers
                 sampled_idx_clients = random.sample(self.client_idx_list,
                     num_clients_curr_iter) if num_clients_curr_iter > 0 else self.client_idx_list
-                sampled_clients = [
-                    Client(
-                        [client_id],
-                        self.config,
-                        self.config['client_config']['type'] == 'optimization',
-                        self.train_dataset
-                    ) for client_id in sampled_idx_clients
-                ]
-
+                
                 # Initialize stats
                 clients_begin = time.time()
 
@@ -326,7 +309,7 @@ class OptimizationServer(federated.Server):
                 self.run_stats['secsPerClientFull'].append([])
                 self.run_stats['secsPerClientTraining'].append([])
                 self.run_stats['secsPerClientSetup'].append([])
-                self.run_stats['mpiCosts'].append([])
+                self.run_stats['communicationCosts'].append([])
 
                 # Check if we want privacy metrics
                 apply_privacy_metrics = self.config.get('privacy_metrics_config', None) and \
@@ -345,7 +328,8 @@ class OptimizationServer(federated.Server):
                 # Reset gradient for the model before assigning the new gradients
                 self.worker_trainer.model.zero_grad()
 
-                for client_output in self.process_clients(sampled_clients, server_data, self.clients_in_parallel):
+                print_rank(f"Clients sampled from server {sampled_idx_clients}", loglevel=logging.DEBUG)
+                for client_output in self.process_clients(sampled_idx_clients, server_data):
                     # Process client output
                     client_timestamp = client_output['ts']
                     client_stats = client_output['cs']
@@ -361,7 +345,7 @@ class OptimizationServer(federated.Server):
                         for metric, value in privacy_stats.items():
                             privacy_metrics_stats[metric].append(value)
 
-                    self.run_stats['mpiCosts'][-1].append(time.time() - client_timestamp)
+                    self.run_stats['communicationCosts'][-1].append(time.time() - client_timestamp)
 
                     # Get actual pseudo-gradients for aggregation
                     payload_processed = self.strategy.process_individual_payload(self.worker_trainer, client_payload)
@@ -513,7 +497,7 @@ class OptimizationServer(federated.Server):
                         'secsPerClientTraining',
                         'secsPerClientFull',
                         'secsPerClientSetup',
-                        'mpiCosts',
+                        'communicationCosts',
                     ]
 
                     for metric in metrics_for_stats:

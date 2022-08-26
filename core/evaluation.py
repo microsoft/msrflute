@@ -10,16 +10,9 @@ import torch
 import numpy as np
 
 # Internal imports
-from core.globals import TRAINING_FRAMEWORK_TYPE
-if TRAINING_FRAMEWORK_TYPE == 'mpi':
-    import core.federated as federated
-else:
-    raise NotImplementedError('{} is not supported'.format(TRAINING_FRAMEWORK_TYPE))
-
+import core.federated as federated
 from core.client import Client
-from utils import (
-    print_rank
-)
+from utils import print_rank
 
 # AzureML-related libs
 from azureml.core import Run
@@ -27,14 +20,14 @@ run = Run.get_context()
 
 class Evaluation():
 
-    def __init__(self, config, model_path, process_testvalidate, val_dataloader, test_dataloader):
+    def __init__(self, config, model_path, process_testvalidate, idx_val_clients, idx_test_clients):
 
         self.config = config
         self.model_path = model_path
         self.process_testvalidate = process_testvalidate
-        self.test_dataloader = val_dataloader
-        self.val_dataloader = test_dataloader
         self.server_type = config['server_config']['type']
+        self.idx_val_clients = idx_val_clients
+        self.idx_test_clients = idx_test_clients
 
         super().__init__()
     
@@ -108,37 +101,35 @@ class Evaluation():
     def run_distributed_inference(self, mode):
         '''Call `run_distributed_evaluation` specifically for test or validation.
         
-        This is just a helper function that fetches the dataloader depending on
-        the mode and calls `run_distributed_evaluation` using that dataloader.
+        This is just a helper function that fetches the clients depending on
+        the mode and calls `run_distributed_evaluation` using that list.
 
         Args:
             mode (str): `test` or `val`.
         '''
         if mode == 'val':
-            dataloader = self.val_dataloader
+            clients = self.idx_val_clients
         elif mode == 'test':
-            dataloader = self.test_dataloader
+            clients = self.idx_test_clients
         else:
             raise NotImplementedError('Unsupported mode: {}'.format(mode))
-        return self.run_distributed_evaluation(dataloader, mode)
 
-    def run_distributed_evaluation(self, dataloader, mode):
+        return self.run_distributed_evaluation(mode, clients)
+
+    def run_distributed_evaluation(self, mode, clients):
         '''Perform evaluation using available workers.
 
         See also `process_test_validate` on federated.py.
 
         Args:
-            dataloader (torch.utils.data.DataLoader): used to fetch data.
             mode (str): `test` or `val`.
+            clients (list): clients for test/val round.
         '''
-        val_clients = list(self.make_eval_clients(dataloader))
-        print_rank(f'mode: {mode} evaluation_clients {len(val_clients)}', loglevel=logging.DEBUG)
 
         total = 0
         self.logits = {'predictions': [], 'probabilities': [], 'labels': []}
         server_data = (0.0, [p.data.to(torch.device('cpu')) for p in self.worker_trainer.model.parameters()])
-
-        for result in self.process_testvalidate(val_clients, server_data, mode):
+        for result in self.process_testvalidate(clients, server_data, mode):
             output, metrics, count = result
             val_metrics =  {key: {'value':0, 'higher_is_better': False} for key in metrics.keys()} if total == 0 else val_metrics
  
@@ -164,34 +155,35 @@ class Evaluation():
         self.losses = [val_metrics['loss']['value'], val_metrics['acc']['value']] # For compatibility with Server
         return val_metrics
 
-    def make_eval_clients(self, dataloader):
-        '''Generator that yields clients for evaluation, continuously.
+def make_eval_clients(dataset, config):
+    '''Generator that yields clients for evaluation, continuously.
 
-        Args:
-            dataloader (torch.utils.data.DataLoader): used to get client's data
-        '''
+    Args:
+        dataset (torch.utils.data.Dataset): used to get client's data
+        config (dict): used for the client's constructor
+    '''
 
-        total = sum(dataloader.dataset.num_samples)
-        clients = federated.size() - 1
-        delta = total / clients + 1
-        threshold = delta
-        current_users_idxs = list()
-        current_total = 0
+    total = sum(dataset.num_samples)
+    clients = federated.size() - 1
+    delta = total / clients + 1
+    threshold = delta
+    current_users_idxs = list()
+    current_total = 0
 
-        if self.server_type == "personalization":  
-            for i in range(len(dataloader.dataset.user_list)):
-                yield Client([i], self.config, False, dataloader.dataset)
-        else:
-            for i in range(len(dataloader.dataset.user_list)):
-                current_users_idxs.append(i)
-                count = dataloader.dataset.num_samples[i]
-                current_total += count
-                if current_total > threshold:
-                    print_rank(f'sending {len(current_users_idxs)} users', loglevel=logging.DEBUG)
-                    yield Client(current_users_idxs, self.config, False, dataloader.dataset)
-                    current_users_idxs = list() 
-                    current_total = 0
+    if config["server_config"]["type"] == "personalization":  
+        for i in range(len(dataset.user_list)):
+            yield Client([i], config, False)
+    else:
+        for i in range(len(dataset.user_list)):
+            current_users_idxs.append(i)
+            count = dataset.num_samples[i]
+            current_total += count
+            if current_total > threshold:
+                print_rank(f'sending {len(current_users_idxs)} users', loglevel=logging.DEBUG)
+                yield Client(current_users_idxs, config, False)
+                current_users_idxs = list()
+                current_total = 0
 
-            if len(current_users_idxs) != 0:
-                print_rank(f'sending {len(current_users_idxs)} users -- residual', loglevel=logging.DEBUG)
-                yield Client(current_users_idxs, self.config, False, dataloader.dataset)
+        if len(current_users_idxs) != 0:
+            print_rank(f'sending {len(current_users_idxs)} users -- residual', loglevel=logging.DEBUG)
+            yield Client(current_users_idxs, config, False)

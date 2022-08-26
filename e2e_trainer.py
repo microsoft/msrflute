@@ -2,7 +2,7 @@
 # Licensed under the MIT license.
 
 '''
-This is the main script to run on each MPI thread. It will spawn either a
+This is the main script to run on each NCCL/GLOO thread. It will spawn either a
 Server or Worker object -- the former is responsible for orchestrating and
 aggregating models, where as the latter processes clients' data to generate
 a new model. The Server lives on the very first thread, whereas remaining
@@ -13,16 +13,17 @@ import argparse
 import os
 import shutil
 import yaml
+import logging
 from psutil import virtual_memory
 
 import torch
+import torch.distributed as dist
 from azureml.core import Run
 
 from core import federated
 from core.config import FLUTEConfig
 from core.server import select_server
 from core.client import Client
-from core.globals import TRAINING_FRAMEWORK_TYPE, logging_level
 from experiments import make_model
 from utils import (
     make_optimizer,
@@ -32,12 +33,9 @@ from utils import (
 )
 from utils.dataloaders_utils import (
     make_train_dataloader,
-    make_val_dataloader,
-    make_test_dataloader,
+    get_dataset,
 )
-
-assert TRAINING_FRAMEWORK_TYPE == "mpi", "Unsupported platform {}".format(TRAINING_FRAMEWORK_TYPE)
-
+from core.evaluation import make_eval_clients
 
 def log_run_properties(config: FLUTEConfig):
     """Log parameters on AzureML.
@@ -76,49 +74,64 @@ def log_run_properties(config: FLUTEConfig):
         run.log(k, properties[k])
 
 
-def run_worker(model_path, config, task, data_path, local_rank):
-    """Spawn worker object that lives throughout MPI thread.
+def run_worker(model_path, config, task, data_path, local_rank, backend):
+    """Spawn worker object that lives throughout NCCL/GLOO thread.
     
     Args:
         model_path (str): path to the pretrained model.
         config (dict): dictionary containing parameters.
         task (str): what task to solve, must be a folder of :code:`experiments`.
         data_path (str): path to data.
-        local_rank (int): the rank of the MPI thread.
+        local_rank (int): the rank of the NCCL/GLOO thread.
     """
     model_config = config["model_config"]
     server_config = config["server_config"]
 
-    # Get the rank on MPI
+    # Backend initialization
+    print_rank(f"Backend: {backend}")
+    dist.init_process_group(backend=backend, init_method=None)
+    rank = dist.get_rank()
+    if torch.cuda.is_available():
+        torch.cuda.set_device(rank)
+
+    # Get the rank on NCCL/GLOO
     rank = local_rank if local_rank > -1 else federated.rank()
 
-    # Assign MPI thread to a specific GPU
+    # Assign NCCL thread to a specific GPU
     if torch.cuda.is_available():
         n_gpus = torch.cuda.device_count()
-        torch.cuda.set_device(federated.local_rank() % n_gpus)
-        print_rank(f"Assigning worker to GPU {federated.local_rank() % n_gpus}")
+        torch.cuda.set_device(federated.rank() % n_gpus)
+        print_rank(f"Assigning worker to GPU {federated.rank() % n_gpus}")
 
     # Make the Model to distribute to workers
     model = make_model(model_config)
+
+    # Get evaluation datasets
+    data_config = config['server_config']['data_config']
+    val_dataset = get_dataset(data_path, data_config["val"], task, mode="val")
+    test_dataset = get_dataset(data_path, data_config["test"], task, mode="test")
+    
+    # Create list of clients for test/val -- Server need the indexes and Worker the clients list
+    val_clients = list(make_eval_clients(val_dataset, config))
+    test_clients = list(make_eval_clients(test_dataset, config))
+
+    # pre-cache the training data and capture the number of clients for sampling
+    client_train_config = config["client_config"]["data_config"]["train"]
+    num_clients = Client.get_train_dataset(data_path, client_train_config,task)
+    config["server_config"]["data_config"]["num_clients"] = num_clients
 
     # Instantiate the Server object on the first thread
     if rank == 0:
         try:
             print_rank('Server data preparation')
 
-            # pre-cache the training data and capture the number of clients for sampling
-            client_train_config = config["client_config"]["data_config"]["train"]
-            num_clients, train_dataset = Client.get_train_dataset(data_path, client_train_config,task)
-            config["server_config"]["data_config"]["num_clients"] = num_clients
-
-            # Make the Dataloaders
-            data_config = config['server_config']['data_config']
             if 'train' in data_config:
                 server_train_dataloader = make_train_dataloader(data_config['train'], data_path, task=task, clientx=None)
             else:
                 server_train_dataloader = None
-            val_dataloader = make_val_dataloader(data_config["val"], data_path, task=task)
-            test_dataloader = make_test_dataloader(data_config["test"], data_path, task=task)
+
+            idx_val_clients = list(range(len(val_clients))) # Generates indexes for val clients
+            idx_test_clients = list(range(len(test_clients))) # Generates indexes for test clients
 
             print_rank("Prepared the dataloaders")
 
@@ -135,18 +148,16 @@ def run_worker(model_path, config, task, data_path, local_rank):
             server_type = server_config["type"]
             server_setup = select_server(server_type)  # Return the server class
             server = server_setup(
-                data_config["num_clients"],
-                model,
-                optimizer,
-                None,
-                data_path,
-                model_path,
-                server_train_dataloader,
-                train_dataset,
-                val_dataloader,
-                test_dataloader,
-                config,
-                server_config
+                num_clients=data_config["num_clients"],
+                model=model,
+                optimizer=optimizer,
+                ss_scheduler=None,
+                data_path=data_path,
+                model_path=model_path,
+                server_train_dataloader=server_train_dataloader,
+                config=config,
+                idx_val_clients=idx_val_clients,
+                idx_test_clients=idx_test_clients,
             )
             log_run_properties(config)
 
@@ -163,10 +174,14 @@ def run_worker(model_path, config, task, data_path, local_rank):
         print_rank("Worker on node {}: process started".format(rank))
         client_config = config["client_config"]
         worker = federated.Worker(
-            model,
-            data_path,
+            model=model,
+            data_path=data_path,
             do_profiling=client_config.get("do_profiling", False),
-            clients_in_parallel=client_config.get("clients_in_parallel", None),
+            val_clients=val_clients,
+            test_clients=test_clients,
+            val_dataset = val_dataset,
+            test_dataset = test_dataset,
+            config= config,
         )
         worker.run()
 
@@ -178,6 +193,7 @@ if __name__ == "__main__":
     parser.add_argument("-outputPath")
     parser.add_argument("-dataPath", default=None)
     parser.add_argument("-task", default=None, help="Define the task for the run")
+    parser.add_argument("-backend", default=None, help="Define the communication protocol")
     parser.add_argument("-num_skip_decoding", default=-1, type=int, help="Skip decoding in unsupervised learning mode")
     parser.add_argument("--local_rank", default=-1, type=int)
 
@@ -185,6 +201,8 @@ if __name__ == "__main__":
     data_path = args.dataPath
     task = args.task
     local_rank = args.local_rank
+    assert args.backend in ['nccl','gloo'], f"Backend {args.backend} not recognized, please select nccl or gloo"
+    backend = args.backend
 
     # The mount point can also be retrieved from input_datasets of the run context
     if data_path is None:
@@ -195,6 +213,7 @@ if __name__ == "__main__":
     id = Run.get_context().id
     experiment_name = "-".join(id.split("-")[-4:-2])
     experiment_root = os.path.join(args.outputPath, experiment_name)
+    os.makedirs(experiment_root, exist_ok=True)
     model_path = os.path.join(experiment_root, "models")
     log_path = os.path.join(experiment_root, "log")
 
@@ -207,7 +226,7 @@ if __name__ == "__main__":
         shutil.copyfile(args.config, cfg_out)
     
     # Initialize logging
-    init_logging(log_path, loglevel=logging_level)
+    init_logging(log_path, loglevel=logging.INFO)
 
     with open(args.config) as f:
 
@@ -222,4 +241,4 @@ if __name__ == "__main__":
         config.validate()
 
         # Instantiate either Server or Worker on the thread
-        run_worker(model_path, config, task, data_path, local_rank)
+        run_worker(model_path, config, task, data_path, local_rank, backend)

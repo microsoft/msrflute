@@ -59,9 +59,9 @@ example is provided in `config.yaml`.
 ## Running the experiment locally
 
 Finally, to launch the experiment, it suffices to launch the `e2e_trainer.py`
-script using MPI:
+script using torch.distributed:
 
-`mpiexec -n 2 python .\e2e_trainer.py -dataPath experiments/ecg_cnn/data -outputPath scratch -config experiments/ecg_cnn/config.yaml -task ecg_cnn `
+`python -m torch.distributed.run --nproc_per_node=2 .\e2e_trainer.py -dataPath experiments/ecg_cnn/data -outputPath scratch -config experiments/ecg_cnn/config.yaml -task ecg_cnn -backend nccl`
 
 The `dataPath`, `outputPath` and `config` arguments should just specify the
 respective files or folders, as in the example above -- in this case, a folder
@@ -90,11 +90,12 @@ command: >
   apt -y install openmpi-bin libopenmpi-dev openssh-client &&
   python3 -m pip install --upgrade pip &&
   python3 -m pip install -r requirements.txt &&
-  mpiexec --allow-run-as-root -n 4 python e2e_trainer.py
+  python -m torch.distributed.run --nproc_per_node=4 e2e_trainer.py
   -outputPath=./outputs
   -dataPath={inputs.data}
   -task=ecg_cnn
   -config=./experiments/ecg_cnn/config.yaml
+  -backend=nccl
 
 ```
 To run your job, you can then use the following command: 

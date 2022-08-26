@@ -27,10 +27,10 @@ data to HDF5 format.
 ## Running the experiment
 
 Finally, to launch the experiment locally , it suffices to launch the `e2e_trainer.py`
-script using MPI, you can use as example the following line:
+script using torch.distributed , you can use as example the following line:
 
 ```code
-    mpiexec -n 3 python e2e_trainer.py -dataPath .\testing\mockup\ -outputPath scratch -config .\testing\configs\hello_world_nlg_gru.yaml -task nlg_gru
+    python -m torch.distributed.run --nproc_per_node=3 e2e_trainer.py -dataPath .\testing\mockup\ -outputPath scratch -config .\testing\configs\hello_world_nlg_gru.yaml -task nlg_gru -backend nccl
 ```
 
 For submitting jobs in Azure ML, we have included the instructions in the `Experiments` 

@@ -7,6 +7,8 @@ from transformers import AutoTokenizer
 from transformers import DataCollatorForLanguageModeling
 from experiments.mlm_bert.dataloaders.dataset import Dataset
 from core.dataloader import BaseDataLoader
+from utils import print_rank
+import logging
 
 class DataLoader(BaseDataLoader):
     """
@@ -38,7 +40,7 @@ class DataLoader(BaseDataLoader):
         else:
             raise ValueError("You are instantiating a new tokenizer from scratch. This is not supported by this script.")
 
-        print("Tokenizer is: ",tokenizer)
+        print_rank("Tokenizer is: {}".format(tokenizer), loglevel=logging.DEBUG)
         
         dataset = Dataset(
                                 data,

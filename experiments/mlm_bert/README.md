@@ -24,10 +24,10 @@ the fields: list_of_train_data, test_data and val_data inside the config file.
 ## Running the experiment locally
 
 Finally, to launch the experiment, it suffices to launch the `e2e_trainer.py`
-script using MPI:
+script using torch.distributed:
 
 ```code
-    mpiexec -n 2 python .\e2e_trainer.py -dataPath data_folder -outputPath scratch -config configs\hello_world_mlm_bert_json.yaml -task mlm_bert
+    python -m torch.distributed.run --nproc_per_node=2 .\e2e_trainer.py -dataPath data_folder -outputPath scratch -config configs\hello_world_mlm_bert_json.yaml -task mlm_bert -backend nccl
 ```
 
 For submitting jobs in Azure ML, we have included the instructions in the `Experiments` 
