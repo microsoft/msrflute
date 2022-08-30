@@ -27,7 +27,7 @@ Each worker>0 processes client tasks sequentially, consisting of data encoding a
     :align: center
     :width: 500
     
-    FLUTE uses a distributed processing architecture backed by OpenMPI. 
+    FLUTE uses a distributed processing architecture backed by torch.distributed. 
 
 Execution runs for up to N training rounds.  In each round the orchestrator may sample a subset of clients, and may also randomly delay pseudo-gradient updates from some clients to future rounds. The orchestrator will also periodically distribute evaluation tasks to determine model quality on validation and test data.
 

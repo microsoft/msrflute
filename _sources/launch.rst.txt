@@ -10,13 +10,13 @@ Install the requirements stated inside of requirements.txt. Ideally this sould b
     conda create -n FLUTE python==3.8
     pip install -r requirements.txt
 
-You will also need some MPI runtime such as OpenMPI (on Linux) or MS-MPI (on Windows). There is no setup.py as FLUTE is not currently distributed as a package, but instead meant to run from the root of the repository.
+FLUTE uses torch.distributed API as its main communication backbone, supporting three buil-in backends. For more information please refer to [Distributed Communication Package](https://pytorch.org/docs/stable/distributed.html). Therefore, we highly suggest to use NCCL backend for distributed GPU training and Gloo for distributed CPU training. There is no `setup.py` as FLUTE is not currently distributed as a package, but instead meant to run from the root of the repository.
 
 After this initial setup you can use your data for launching a local run. However the following instructions will be adapted to run ``nlg_gru`` task. For running this example, you need to first download and preprocess the data. Instructions can be found `here`_.  Once the data is available you can run FLUTE from root as follows:
 
 .. code:: bash
 
-    mpiexec -n 3 python e2e_trainer.py -dataPath ./testing/mockup -outputPath scratch -config testing/configs/hello_world_local.yaml -task nlg_gru
+    python -m torch.distributed.run --nproc_per_node=3 e2e_trainer.py -dataPath ./testing/mockup -outputPath scratch  -config testing/configs/hello_world_local.yaml -task nlg_gru -backend nccl
 
 .. _here: https://github.com/microsoft/msrflute/tree/main/testing
 
@@ -56,14 +56,15 @@ For running experiments on AzureML, the CLI can help. You should first install t
     apt -y install openmpi-bin libopenmpi-dev openssh-client &&
     python3 -m pip install --upgrade pip &&
     python3 -m pip install -r requirements.txt &&
-    mpiexec --allow-run-as-root -n 4 python e2e_trainer.py
+    python -m torch.distributed.run --nproc_per_node=4 e2e_trainer.py
     -outputPath=./outputs
     -dataPath={inputs.data}
     -task=classif_cnn
-    -config=./experiments/classif_cnn/config.yaml|
+    -config=./experiments/classif_cnn/config.yaml
+    -backend=nccl
 
 
-You should replace ``compute`` with the name of the one you created before, and adjust the path of the datastore containing the data. In the example above, we created a datastore called ``data`` and added to it a folder called ``cifar``, which contained the two HDF5 files. The command passed above will install dependencies and then launch an MPI job with 4 threads, for the experiment defined in ``experiments/classif_cnn``. Details on how to run a job using the AzureML CLI are given in its `documentation`_ , but typically it suffices to set up the environment and type ``az ml job create -f <name-of-the-yaml-file>``. In the same page of the documentation, you can also find more info about how to set up the YAML file above, in case other changes are needed.
+You should replace ``compute`` with the name of the one you created before, and adjust the path of the datastore containing the data. In the example above, we created a datastore called ``data`` and added to it a folder called ``cifar``, which contained the two HDF5 files. The command passed above will install dependencies and then launch a NCCL job with 4 threads, for the experiment defined in ``experiments/classif_cnn``. Details on how to run a job using the AzureML CLI are given in its `documentation`_ , but typically it suffices to set up the environment and type ``az ml job create -f <name-of-the-yaml-file>``. In the same page of the documentation, you can also find more info about how to set up the YAML file above, in case other changes are needed.
 
 .. _documentation: https://docs.microsoft.com/en-us/azure/machine-learning/how-to-train-cli
 

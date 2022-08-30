@@ -101,7 +101,7 @@
 <figure class="align-center" id="id2">
 <a class="reference internal image-reference" href="_images/client-server-visio.png"><img alt="_images/client-server-visio.png" src="_images/client-server-visio.png" style="width: 500px;" /></a>
 <figcaption>
-<p><span class="caption-text">FLUTE uses a distributed processing architecture backed by OpenMPI.</span><a class="headerlink" href="#id2" title="Permalink to this image">¶</a></p>
+<p><span class="caption-text">FLUTE uses a distributed processing architecture backed by torch.distributed.</span><a class="headerlink" href="#id2" title="Permalink to this image">¶</a></p>
 </figcaption>
 </figure>
 <p>Execution runs for up to N training rounds.  In each round the orchestrator may sample a subset of clients, and may also randomly delay pseudo-gradient updates from some clients to future rounds. The orchestrator will also periodically distribute evaluation tasks to determine model quality on validation and test data.</p>
