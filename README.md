@@ -26,13 +26,13 @@ pip install -r requirements.txt
 
 FLUTE uses torch.distributed API as its main communication backbone, supporting three built-in backends. For more information please refer to [Distributed Communication Package](https://pytorch.org/docs/stable/distributed.html). Therefore, we highly suggest to use NCCL backend for distributed GPU training and Gloo for distributed CPU training. There is no `setup.py` as FLUTE is not currently distributed as a package, but instead meant to run from the root of the repository.
 
-After this initial setup, you can use the data created for the integration test inside of `testing` for a first local run. Note that this data needs to be download manually, for more instructions please look at [the README file inside `testing`](testing/README.md).
+After this initial setup, you can use the data created for the integration test for a first local run. Note that this data needs to be download manually inside the `testing` folder, for more instructions please look at [the README file inside `testing`](testing/README.md).
 
 ```
-python -m torch.distributed.run --nproc_per_node=3 e2e_trainer.py -dataPath ./testing/mockup -outputPath scratch  -config testing/configs/hello_world_local.yaml -task nlg_gru -backend nccl
+python -m torch.distributed.run --nproc_per_node=3 e2e_trainer.py -dataPath ./testing -outputPath scratch -config testing/hello_world_nlg_gru.yaml -task nlg_gru -backend nccl
 ```
 
-This config uses 1 node with 3 workers (1 server, 2 clients). The config file `testing/configs/hello_world_local.yaml` has some comments explaining the major sections and some important details; essentially, it consists in a very short experiment where a couple of iterations are done for just a few clients. A `scratch` folder will be created containing detailed logs.
+This config uses 1 node with 3 workers (1 server, 2 clients). The config file `testing/hello_world_nlg_gru.yaml` has some comments explaining the major sections and some important details; essentially, it consists in a very short experiment where a couple of iterations are done for just a few clients. A `scratch` folder will be created containing detailed logs.
 
 ## Documentation
 
