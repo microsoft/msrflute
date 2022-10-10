@@ -1,0 +1,64 @@
+# Parameters needed to initialize the model
+model_config:
+    model_type: FEDNEWS                                    # class w/ `loss` and `inference` methods
+    model_folder: experiments/fednewsrec/model.py     # file containing class
+    embbeding_path: /mnt/data/MIND_large
+# Configuration for differential privacy
+dp_config:
+    enable_local_dp: false                             # whether to enable user-level DP
+
+# Additional privacy metrics
+privacy_metrics_config:
+    apply_metrics: false                               # cache data to compute additional metrics
+
+# Select the Federated optimizer to use (e.g. DGA or FedAvg)
+strategy: FedAvg
+
+# Determines all the server-side settings for training and evaluation rounds
+server_config:   
+    wantRL: false                                      # whether to use RL-based meta-optimizers
+    resume_from_checkpoint: true                      # restart from checkpoint if file exists
+    do_profiling: false                                # run profiler and compute runtime metrics
+    optimizer_config:                                  # this is the optimizer used to update the model
+        type: sgd
+        lr: 1.0
+    annealing_config:                                  # annealer for the learning rate
+        type: step_lr
+        step_interval: epoch
+        gamma: 1.0
+        step_size: 100
+    val_freq: 50                                       # how many iterations between metric eval on val set
+    rec_freq: 2000                                      # how many iterations between metric eval on test set
+    initial_val: true
+    initial_rec: false
+    max_iteration: 1500                                # how many iterations in total
+    num_clients_per_iteration: 500                     # how many clients per iteration
+    data_config:                                       # where to get val and test data from
+        val:
+            batch_size: 1
+            val_data: null                             # Assigned to null because dataset is being instantiated
+        test:
+            batch_size: 1
+            test_data: null                            # Assigned to null because dataset is being instantiated
+    type: model_optimization
+    aggregate_median: softmax                          # how aggregations weights are computed
+    initial_lr_client: 0.1                           # learning rate used on client optimizer
+    lr_decay_factor: 1.0
+    weight_train_loss: train_loss
+    best_model_criterion: auc
+    fall_back_to_best_model: false
+    softmax_beta: 1.0
+
+# Dictates the learning parameters for client-side model updates. Train data is defined inside this config.
+client_config:
+    do_profiling: false                                # run profiling and compute runtime metrics
+    ignore_subtask: false
+    data_config:                                       # where to get training data from
+        train:
+            batch_size: 64
+            list_of_train_data: null                   # Assigned to null because dataset is being instantiated
+            desired_max_samples: 50000
+    optimizer_config:                                  # this is the optimizer used by the client
+        type: sgd
+        lr: 0.1                                      # this is overridden by `initial_lr_client`
+    type: optimization

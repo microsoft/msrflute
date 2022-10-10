@@ -130,6 +130,8 @@ This software includes the script testing/build_vocab.py from LEAF Library (http
 
 This software includes the model implementation of the example ECG Classification | CNN LSTM Attention Mechanism from Kaggle Competition (https://www.kaggle.com/polomarco/ecg-classification-cnn-lstm-attention-mechanism) to reproduce the [ecg_cnn](experiments/ecg_cnn/model.py) experiment.
 
+This software includes the model implementation of the FedNewsRec repository (https://github.com/taoqi98/FedNewsRec)| Code from the paper "Privacy-Preserving News Recommendation Model Learning" (https://arxiv.org/abs/2003.09592) ported to PyTorch framework to reproduce the [fednewsrec](experiments/fednewsrec/model.py) experiment.
+
 For more information about third-party OSS licence, please refer to [NOTICE.txt](NOTICE.txt).
 
 ## Support

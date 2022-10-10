@@ -82,7 +82,7 @@ def make_test_dataloader(data_config, data_path, task=None, data_strct=None):
 
     return test_dataloader
 
-def get_dataset(data_path, data_config, task, mode):
+def get_dataset(data_path, data_config, task, mode, test_only=False):
     """ Return the task train/val/test dataset """
 
     dir = os.path.join('experiments',task,'dataloaders','dataset.py')
@@ -91,7 +91,7 @@ def get_dataset(data_path, data_config, task, mode):
     data_file = "val_data" if mode == "val" else "test_data" if mode == "test" else "list_of_train_data"
     data_file = data_config[data_file]
     data_file = os.path.join(data_path, data_file) if data_file != None else data_file
-    dataset = dataset(data_file, user_idx=-1, args=data_config)
+    dataset = dataset(data_file, test_only=test_only, user_idx=-1, args=data_config)
 
     return dataset
 

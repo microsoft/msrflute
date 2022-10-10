@@ -30,4 +30,8 @@ popular datasets, model architectures, and common image transformations for comp
 is licenced under BSD 3-Clause License, you can find a copy of this licence at 
 https://github.com/pytorch/vision/blob/main/LICENSE
 
+This software includes parts of FedNewsRec-EMNLP-Findings-2020 repository (https://github.com/taoqi98/FedNewsRec).  
+Code from the paper "Privacy-Preserving News Recommendation Model Learning". This example is licenced 
+under MIT License, you can find a copy of this licence at https://github.com/taoqi98/FedNewsRec/blob/master/LICENSE
+
 

@@ -108,8 +108,8 @@ def run_worker(model_path, config, task, data_path, local_rank, backend):
 
     # Get evaluation datasets
     data_config = config['server_config']['data_config']
-    val_dataset = get_dataset(data_path, data_config["val"], task, mode="val")
-    test_dataset = get_dataset(data_path, data_config["test"], task, mode="test")
+    val_dataset = get_dataset(data_path, data_config["val"], task, mode="val", test_only=True)
+    test_dataset = get_dataset(data_path, data_config["test"], task, mode="test", test_only=True)
     
     # Create list of clients for test/val -- Server need the indexes and Worker the clients list
     val_clients = list(make_eval_clients(val_dataset, config))
