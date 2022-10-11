@@ -75,12 +75,12 @@
              
   <section id="flute-overview">
 <h1>FLUTE Overview<a class="headerlink" href="#flute-overview" title="Permalink to this headline">¶</a></h1>
-<p>FLUTE is a high-performance open source platform that enables researchers and developers to perform rapid prototyping and offline simulations of novel federated learning algorithms at scale.</p>
+<p>FLUTE: Federated Learning Utilities and Tools for Experimentation is a high-performance open source platform that enables researchers and developers to perform rapid prototyping and offline simulations of novel federated learning algorithms at scale.</p>
 <p>An FLUTE job consists of one or more nodes (physical or virtual machines) executing a total of K workers that can become a Server or Client.</p>
 <figure class="align-center" id="id1">
-<a class="reference internal image-reference" href="_images/concepts-visio.png"><img alt="_images/concepts-visio.png" src="_images/concepts-visio.png" style="width: 400px;" /></a>
+<a class="reference internal image-reference" href="_images/client-server.png"><img alt="_images/client-server.png" src="_images/client-server.png" style="width: 600px;" /></a>
 <figcaption>
-<p><span class="caption-text">Independent nodes can execute up to K workers (independent OS-level processes).</span><a class="headerlink" href="#id1" title="Permalink to this image">¶</a></p>
+<p><span class="caption-text">FLUTE uses a distributed processing architecture backed by torch.distributed.</span><a class="headerlink" href="#id1" title="Permalink to this image">¶</a></p>
 </figcaption>
 </figure>
 <p>Worker 0 acts as a central orchestrator, maintaining and distributing the central model to workers, and subsequently distributing client tasks to them. On each training round the orchestrator takes care of:</p>
@@ -98,28 +98,18 @@
 </ul>
 </div></blockquote>
 <p>Each worker&gt;0 processes client tasks sequentially, consisting of data encoding and one or more batch updates to the central model (note the central model is reset to its original state for each client task). As each client task completes, the model delta, aka the pseudo-gradient is sent back to the orchestrator for federation into a new central model.</p>
-<figure class="align-center" id="id2">
-<a class="reference internal image-reference" href="_images/client-server-visio.png"><img alt="_images/client-server-visio.png" src="_images/client-server-visio.png" style="width: 500px;" /></a>
-<figcaption>
-<p><span class="caption-text">FLUTE uses a distributed processing architecture backed by torch.distributed.</span><a class="headerlink" href="#id2" title="Permalink to this image">¶</a></p>
-</figcaption>
-</figure>
 <p>Execution runs for up to N training rounds.  In each round the orchestrator may sample a subset of clients, and may also randomly delay pseudo-gradient updates from some clients to future rounds. The orchestrator will also periodically distribute evaluation tasks to determine model quality on validation and test data.</p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>AzureML generally expects there will be one worker per GPU on each node.</p>
 </div>
-<div class="admonition note">
-<p class="admonition-title">Note</p>
-<p>Due to networking overhead, it is often faster to run jobs on a single node with 8 or 16 GPUs, rather than on multiple nodes.</p>
-</div>
 <section id="architecture">
 <h2>Architecture<a class="headerlink" href="#architecture" title="Permalink to this headline">¶</a></h2>
 <p>FLUTE design is based on a central server architecture.</p>
-<figure class="align-center" id="id3">
+<figure class="align-center" id="id2">
 <a class="reference internal image-reference" href="_images/architecture.png"><img alt="_images/architecture.png" src="_images/architecture.png" style="width: 500px;" /></a>
 <figcaption>
-<p><span class="caption-text">FLUTE logical workflow.</span><a class="headerlink" href="#id3" title="Permalink to this image">¶</a></p>
+<p><span class="caption-text">FLUTE logical workflow.</span><a class="headerlink" href="#id2" title="Permalink to this image">¶</a></p>
 </figcaption>
 </figure>
 <p>The logical workflow performed is:</p>
