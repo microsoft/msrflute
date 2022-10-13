@@ -334,13 +334,17 @@ class Server:
                 print_rank(f"Waiting for a workers, free nodes {free_nodes}, reqs_lst {node_request_map}", loglevel=logging.DEBUG)
                 while len(free_nodes) == 0:
                     node_request_map, results_list, free_nodes = receive_workers_output(node_request_map, results_list, free_nodes, command, idle_nodes)
+                    for output in results_list:
+                        yield output
+                    results_list = []
 
         # Wait for all workers to finish
         while (len(node_request_map)) != 0:
             node_request_map, results_list, free_nodes = receive_workers_output(node_request_map, results_list, free_nodes, command, idle_nodes)
 
-        for output in results_list:
-            yield output
+            for output in results_list:
+                yield output
+            results_list = []
         
         if do_profiling:
             profiler.disable()
