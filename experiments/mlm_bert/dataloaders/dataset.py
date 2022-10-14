@@ -58,8 +58,9 @@ class Dataset(BaseDataset):
 
         self.load_data(data, user_idx)
 
-        if not self.process_line_by_line:
-            self.post_process_list()
+        if user_idx != -1: # Avoid loading unnecessary data on memory before training
+            if not self.process_line_by_line:
+                self.post_process_list()
 
 
     def __len__(self):
@@ -95,12 +96,13 @@ class Dataset(BaseDataset):
         self.num_samples= orig_strct['num_samples']
         self.user_data  = orig_strct['user_data']
 
-        if self.test_only:
-            self.user = 'test_only'
-            self.process_x(self.user_data)
-        else:
-            self.user = self.user_list[user_idx]
-            self.process_x(self.user_data[self.user])
+        if user_idx != -1: # Avoid loading unnecessary data on memory before training
+            if self.test_only:
+                self.user = 'test_only'
+                self.process_x(self.user_data)
+            else:
+                self.user = self.user_list[user_idx]
+                self.process_x(self.user_data[self.user])
 
     def process_x(self, raw_x_batch):
 
