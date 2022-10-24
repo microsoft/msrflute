@@ -180,7 +180,7 @@ class DGA(BaseStrategy):
             self.client_parameters_stack.append(payload['gradients'])
         return True
 
-    def combine_payloads(self, worker_trainer, curr_iter, num_clients_curr_iter, client_stats, logger=None):
+    def combine_payloads(self, worker_trainer, curr_iter, num_clients_curr_iter, total_clients, client_stats, logger=None):
         '''Combine payloads to update model
 
         Args:
@@ -188,6 +188,7 @@ class DGA(BaseStrategy):
                 (aka model updater).
             curr_iter (int): current iteration.
             num_clients_curr_iter (int): number of clients on current iteration.
+            total_clients (int): size of total pool of clients (for privacy accounting)
             client_stats (dict): stats being collected.
             logger (callback): function called to log quantities.
 
@@ -220,7 +221,7 @@ class DGA(BaseStrategy):
 
         # DP-specific steps
         privacy.apply_global_dp(self.config, worker_trainer.model, num_clients_curr_iter=num_clients_curr_iter, select_grad=True, metric_logger=logger)
-        eps = privacy.update_privacy_accountant(self.config, num_clients_curr_iter, curr_iter=curr_iter, num_clients_curr_iter=num_clients_curr_iter)
+        eps = privacy.update_privacy_accountant(self.config, total_clients, curr_iter=curr_iter, num_clients_curr_iter=num_clients_curr_iter)
         if eps:
             print_rank(f'DP result: {eps}')
 

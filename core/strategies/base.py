@@ -42,7 +42,7 @@ class BaseStrategy:
         '''
         pass
 
-    def combine_payloads(self, worker_trainer, curr_iter, num_clients_curr_iter, client_stats, logger=None):
+    def combine_payloads(self, worker_trainer, curr_iter, num_clients_curr_iter, total_clients, client_stats, logger=None):
         '''Combine payloads to update model
         
         Args:
@@ -50,6 +50,7 @@ class BaseStrategy:
                 (aka model updater).
             curr_iter (int): current iteration.
             num_clients_curr_iter (int): number of clients on current iteration.
+            total_clients (int): size of total pool of clients (for privacy accounting)
             client_stats (dict): stats being collected.
             logger (callback): function called to log quantities.
         '''

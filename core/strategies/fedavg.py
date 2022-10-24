@@ -116,7 +116,7 @@ class FedAvg(BaseStrategy):
             self.client_parameters_stack.append(payload['gradients'])
         return True
 
-    def combine_payloads(self, worker_trainer, curr_iter, num_clients_curr_iter, client_stats, logger=None):
+    def combine_payloads(self, worker_trainer, curr_iter, num_clients_curr_iter, total_clients, client_stats, logger=None):
         '''Combine payloads to update model
 
         Args:
@@ -160,6 +160,8 @@ class FedAvg(BaseStrategy):
         worker_trainer.update_model()
         print_rank('Updating learning rate scheduler')
         losses = worker_trainer.run_lr_scheduler(force_run_val=False)
+
+        # TODO: Global DP. See dga.py
 
         return losses
 

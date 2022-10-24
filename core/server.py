@@ -416,6 +416,7 @@ class OptimizationServer(federated.Server):
                     worker_trainer=self.worker_trainer,
                     curr_iter=i,
                     num_clients_curr_iter=num_clients_curr_iter,
+                    total_clients = len(self.client_idx_list),
                     client_stats=client_stats,
                     logger=log_metric,
                 )
