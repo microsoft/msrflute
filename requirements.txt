@@ -16,3 +16,4 @@ cerberus
 protobuf
 sentencepiece
 googledrivedownloader
+wget

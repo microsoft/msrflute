@@ -15,6 +15,52 @@ FLUTE is a pytorch-based orchestration environment enabling GPU or CPU-based FL 
 - extensibility, enabling new models, dataloaders, optimizers, and aggregators.
 - local or cloud-based job staging using AzureML
 
+## Benchmarking
+
+The following common tasks were used to evaluate the performance in speed/memory utilization of FLUTE compared with the most representative simulation platforms based on their number of starts on GitHub: FedML 0.7.303 and Flower 1.0.0. 
+
+|Task|Data Set|Model|Algorithm|# Clients|Clients per round|Batch Size|Client Optimizer|lr|Epochs|# Rounds|Test Freq|
+|:----|:----|:----|:----|:----|:----|:----|:----|:----|:----|:----|:----|
+|CV|MNIST|LR|FedAvg|1000|10|10|SGD|0.03|1|100|20|
+|CV|Federated EMNIST|CNN (2 Conv + 2 FC)|FedAvg|3400|10|20|SGD|0.1|1|1500|50|
+|CV|FED_CIFAR-100|ResNet-18+group normalization|FedAvg|500|10|20|SGD|0.1|1|4000|50|
+|NLP|Shakespeare|RNN (2 LSTM + 1 FC)|FedAvg|715|10|4|SGD|0.8|1|1200|50|
+
+### FedML Comparison
+
+This comparison was carried out using Parrot (Simulator) on version 0.7.303 at commit ID [8f7f261f](https://github.com/FedML-AI/FedML/tree/8f7f261f44e58d0cb5a416b0d6fa270b42a91049). Showing that in some cases FLUTE can outperform 43x faster.
+
+```
+ _____________________________________________________________________________
+|                    |   FedML (MPI) - Fastest   |   FLUTE (NCCL)  - Fastest  |
+| Task               | Acc | Time     | GPU Mem  | Acc | Time     | GPU Mem   |
+|--------------------|-----|----------|----------|-----|----------|-----------|
+| LR_MNIST           | ~81 | 00:03:09 | ~3060 MB | ~81 | 00:01:35 | ~1060 MB  |
+| CNN_FEMNIST        | ~83 | 05:49:52 | ~5180 MB | ~83 | 00:08:22 | ~1770 MB  |
+| RESNET_FEDCIFAR100 | ~34 | 15:55:36 | ~5530 MB | ~33 | 01:42:01 | ~1900 MB  |
+| RNN_FEDSHAKESPEARE | ~57 | 06:46:21 | ~3690 MB | ~57 | 00:21:50 | ~1270 MB  |
+ -----------------------------------------------------------------------------
+```
+
+You can find the examples above in [experiments](experiments).
+
+### Flower Comparison
+
+This comparison was carried out using Flower (Simulator) on version 1.0.0 at commit ID [4e7fad9](https://github.com/adap/flower/tree/4e7fad99389a5ee511730841b61f279e3359cb16) with the [lr_mnist](experiments/cv_lr_mnist/) task. Showing that in some cases FLUTE can outperform 53x faster.
+
+```
+ ________________________________________________
+|        |    Flower (Ray)   | FLUTE (NCCL/Gloo) |
+|        | Acc |    Time     | Acc |    Time     |
+|--------|-----|-------------|-----|-------------|
+| CPU    | ~80 |   00:30:14  | ~80 |   00:03:20  |
+| GPU 2x | ~80 |   01:21:44  | ~80 |   00:01:31  |
+| GPU 4x | ~79 |   00:56:45  | ~81 |   00:01:26  |
+ ------------------------------------------------
+```
+
+You can find the example above in the [cv_lr_mnist](experiments/cv_lr_mnist/) folder.
+
 ## Quick Start
 
 Install the requirements stated inside of `requirements.txt`. Ideally this sould be done inside of a virtual environment, for instance, using Anaconda.
@@ -131,9 +177,7 @@ This software includes the script testing/build_vocab.py from LEAF Library (http
 This software includes the model implementation of the example ECG Classification | CNN LSTM Attention Mechanism from Kaggle Competition (https://www.kaggle.com/polomarco/ecg-classification-cnn-lstm-attention-mechanism) to reproduce the [ecg_cnn](experiments/ecg_cnn/model.py) experiment.
 
 This software includes the model implementation of the FedNewsRec repository (https://github.com/taoqi98/FedNewsRec)| Code from the paper "Privacy-Preserving News Recommendation Model Learning" (https://arxiv.org/abs/2003.09592) ported to PyTorch framework to reproduce the [fednewsrec](experiments/fednewsrec/model.py) experiment.
-
 For more information about third-party OSS licence, please refer to [NOTICE.txt](NOTICE.txt).
-
 ## Support
 
 You are welcome to open issues on this repository related to bug reports and feature requests.
@@ -141,3 +185,5 @@ You are welcome to open issues on this repository related to bug reports and fea
 ## Contributing
 
 Contributions are welcomed and encouraged. For details on how to contribute, please see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+
