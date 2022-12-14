@@ -43,6 +43,8 @@ from extensions.privacy import metrics as privacy_metrics
 from experiments import make_model
 
 global train_dataset
+global trainset_unlab
+global trainset_unlab_rand
 
 class Client:
     # It's unclear why, but sphinx refuses to generate method docs
@@ -82,27 +84,44 @@ class Client:
             task (str): task name.
         '''
         global train_dataset
+        global trainset_unlab
+        global trainset_unlab_rand
+
         train_dataset = get_dataset(data_path, client_train_config, task, mode="train")
+
+        if task == 'semisupervision':
+            trainset_unlab = get_dataset(data_path, client_train_config, task, mode="train", user_idx = -2)
+            trainset_unlab_rand = get_dataset(data_path, client_train_config, task, mode="train", user_idx = -3)
+        else:
+            trainset_unlab = None
+            trainset_unlab_rand = None
+
         return len(train_dataset.user_list)
 
     @staticmethod
     def get_data(clients, dataset):
         ''' Create training dictionary'''
 
-        dataset = train_dataset if len(clients) ==1 else dataset # clients is an integer only for training mode
-        data_with_labels = hasattr(dataset,"user_data_label")
-        input_strct = {'users': [], 'num_samples': [],'user_data': dict(), 'user_data_label': dict()} if data_with_labels else {'users': [], 'num_samples': [],'user_data': dict()}
+        if dataset == None: # Training case
+            datasets = [train_dataset, trainset_unlab, trainset_unlab_rand] if trainset_unlab != None else [train_dataset]
+        else: # Evaluation case
+            datasets = [dataset]
+
+        data_with_labels = hasattr(datasets[0],"user_data_label")
         
-        for client in clients:
-            user = dataset.user_list[client]
-            input_strct['users'].append(user)
-            input_strct['num_samples'].append(dataset.num_samples[client])
-            input_strct['user_data'][user]= dataset.user_data[user]
-            if data_with_labels: 
-                input_strct['user_data_label'][user] = dataset.user_data_label[user]
-
-        return edict(input_strct)
-
+        strcts = [] # Returning list length will always be 1 except when the task is semisupervision
+        for dataset in datasets:
+            input_strct = {'users': [], 'num_samples': [],'user_data': dict(), 'user_data_label': dict()} if data_with_labels else {'users': [], 'num_samples': [],'user_data': dict()}
+            for client in clients:
+                user = dataset.user_list[client]
+                input_strct['users'].append(user)
+                input_strct['num_samples'].append(dataset.num_samples[client])
+                input_strct['user_data'][user]= dataset.user_data[user]
+                if data_with_labels: 
+                    input_strct['user_data_label'][user] = dataset.user_data_label[user]
+            strcts.append(edict(input_strct))
+        
+        return strcts 
 
     @staticmethod
     def run_testvalidate(client_data, server_data, mode, model):
@@ -124,16 +143,18 @@ class Client:
         '''
 
         # Process inputs and initialize variables
-        _, data_strct, config, _ = client_data
-        _, model_parameters = server_data
+        _, data_strcts, config, _ = client_data
+        _, model_parameters, iteration = server_data
         config = copy.deepcopy(config)
         model_path = config["model_path"]
 
         begin = time.time()  
 
         # Use the server's data config since we're distributing test/validate from the server
+        data_strct = data_strcts[0]
         data_config = config['server_config']['data_config'][mode]
         want_logits = data_config.get('wantLogits', False)
+        send_dicts = config['server_config'].get('send_dicts', False)
 
         # Create dataloader 
         dataloader = None
@@ -146,9 +167,18 @@ class Client:
         # Set model parameters
         n_layers, n_params = len([f for f in model.parameters()]), len(model_parameters)
         print_rank(f'Copying model parameters... {n_layers}/{n_params}', loglevel=logging.DEBUG)
+        
         model = to_device(model)
-        for p, data in zip(model.parameters(), model_parameters):
-            p.data = data.detach().clone().cuda() if torch.cuda.is_available() else data.detach().clone()
+        
+        if send_dicts: # Send model state dictionary
+            tmp = {}
+            for param_key, param_dict in zip (model.state_dict(), model_parameters):
+                tmp[param_key] = param_dict
+            model.load_state_dict(tmp)
+        else: # Send parameters
+            for p, data in zip(model.parameters(), model_parameters):
+                p.data = data.detach().clone().cuda() if torch.cuda.is_available() else data.detach().clone()
+
         print_rank(f'Model setup complete. {time.time() - begin}s elapsed.', loglevel=logging.DEBUG)
 
         # Compute output and metrics on the test or validation data
@@ -217,13 +247,14 @@ class Client:
             torch.cuda.set_device(federated.rank())
 
         # Process inputs and initialize variables
-        client_id, data_strct, config, send_gradients = client_data
-        initial_lr, model_parameters = server_data
+        client_id, data_strcts, config, send_gradients = client_data
+        initial_lr, model_parameters, iteration = server_data
         config = copy.deepcopy(config)
 
         model_config = config['model_config']
         client_config = config['client_config']
         data_config = client_config['data_config']['train']
+        semisupervision_config = client_config.get('semisupervision',None)
         task = client_config.get('task', {})
         trainer_config = client_config.get('trainer_config', {})
         privacy_metrics_config = config.get('privacy_metrics_config', None)
@@ -232,10 +263,12 @@ class Client:
         StrategyClass = select_strategy(config['strategy'])
         strategy = StrategyClass('client', config)
         print_rank(f'Client successfully instantiated strategy {strategy}', loglevel=logging.DEBUG)
+        send_dicts = config['server_config'].get('send_dicts', False)
 
         begin = time.time()  
         client_stats = {}  
 
+        data_strct = data_strcts[0]
         user = data_strct['users'][0]
         print_rank('Loading : {}-th client with name: {}, {} samples, {}s elapsed'.format(
             client_id[0], user, data_strct['num_samples'][0], time.time() - begin), loglevel=logging.INFO)
@@ -251,14 +284,22 @@ class Client:
                 input_dim=data_config['input_dim'],
                 vocab_size=train_dataloader.vocab_size,
             )
-
+        
         # Set model parameters
         n_layers, n_params = len([f for f in model.parameters()]), len(model_parameters)
         print_rank(f'Copying model parameters... {n_layers}/{n_params}', loglevel=logging.DEBUG)
         model = to_device(model)
-        for p, data in zip(model.parameters(), model_parameters):
-            p.data = data.detach().clone().cuda() if torch.cuda.is_available() else data.detach().clone()
+
+        if send_dicts: # Send model state dictionary
+            tmp = {}
+            for param_key, param_dict in zip (model.state_dict(), model_parameters):
+                tmp[param_key] = param_dict
+            model.load_state_dict(tmp)
+        else: # Send parameters
+            for p, data in zip(model.parameters(), model_parameters):
+                p.data = data.detach().clone().cuda() if torch.cuda.is_available() else data.detach().clone()
         print_rank(f'Model setup complete. {time.time() - begin}s elapsed.', loglevel=logging.DEBUG)
+
 
         # Fix parameters of layers
         if 'updatable_names' in trainer_config:
@@ -315,21 +356,29 @@ class Client:
         apply_privacy_metrics = (False if privacy_metrics_config is None else privacy_metrics_config['apply_metrics'])
 
         # This is where training actually happens
-        train_loss, num_samples = trainer.train_desired_samples(desired_max_samples=desired_max_samples, apply_privacy_metrics=apply_privacy_metrics)
+        algo_payload = None
+
+        if semisupervision_config != None:
+            datasets =[get_dataset(data_path, config, task, mode="train", test_only=False, data_strct=data_strcts[i], user_idx=0) for i in range(3)]
+            algo_payload = {'algo':'FedLabels', 'data': datasets, 'iter': iteration, 'config': semisupervision_config}
+
+        train_loss, num_samples, algo_computation = trainer.train_desired_samples(desired_max_samples=desired_max_samples, apply_privacy_metrics=apply_privacy_metrics, algo_payload = algo_payload)
         print_rank('client={}: training loss={}'.format(client_id[0], train_loss), loglevel=logging.DEBUG)
 
         # Estimate gradient magnitude mean/var
         # Now computed when the sufficient stats are updated.
         assert 'sum' in trainer.sufficient_stats
         assert 'mean' in trainer.sufficient_stats
-
+        
         trainer.train_loss = train_loss
         trainer.num_samples = num_samples
+        trainer.algo_computation = algo_computation
 
         # Compute pseudo-gradient
-        for p, data in zip(trainer.model.parameters(), model_parameters):
-            data = to_device(data)
-            p.grad = data - p.data
+        if not send_dicts:
+            for p, data in zip(trainer.model.parameters(), model_parameters):
+                data = to_device(data)
+                p.grad = data - p.data
 
         payload = strategy.generate_client_payload(trainer) if send_gradients else None
 

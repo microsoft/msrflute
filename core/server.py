@@ -79,6 +79,7 @@ class OptimizationServer(federated.Server):
 
         self.max_iteration = server_config['max_iteration']
         self.do_clustering = server_config.get('clustering', False)
+        self.send_dicts = server_config.get('send_dicts', False)
 
         self.num_clients_per_iteration = [int(x) for x in server_config['num_clients_per_iteration'].split(',')] \
             if isinstance(server_config['num_clients_per_iteration'], str) \
@@ -271,10 +272,13 @@ class OptimizationServer(federated.Server):
                 # Run training on clients
                 self.worker_trainer.model.zero_grad()
                 self.train_loss = []
-                server_data = (
-                    initial_lr,
-                    [p.data.to(torch.device('cpu')) for p in self.worker_trainer.model.parameters()]
-                )
+
+                if self.send_dicts: # Send state dictionaries
+                    glob_payload = [self.worker_trainer.model.state_dict()[param_key].to(torch.device('cpu')) for param_key in self.worker_trainer.model.state_dict()]
+                else: # Send parameters
+                    glob_payload = [p.data.to(torch.device('cpu')) for p in self.worker_trainer.model.parameters()]
+                
+                server_data = (initial_lr, glob_payload, i)
 
                 # Random number of clients per iteration
                 if len(self.num_clients_per_iteration) > 1:
@@ -327,7 +331,7 @@ class OptimizationServer(federated.Server):
 
                 # Reset gradient for the model before assigning the new gradients
                 self.worker_trainer.model.zero_grad()
-
+                
                 print_rank(f"Clients sampled from server {sampled_idx_clients}", loglevel=logging.DEBUG)
                 for client_output in self.process_clients(sampled_idx_clients, server_data):
                     # Process client output
@@ -420,7 +424,7 @@ class OptimizationServer(federated.Server):
                     client_stats=client_stats,
                     logger=log_metric,
                 )
-
+                
                 # Run a couple of iterations of training data on the server
                 if self.server_trainer is not None:
                     print_rank('Running replay iterations on server')
@@ -445,10 +449,13 @@ class OptimizationServer(federated.Server):
                     eval_list.append("val")
                 if ((i+1) % self.req_freq) == 0 :
                     eval_list.append("test")
-
+                
                 if len(eval_list)> 0:
                     print_rank('Running {} at itr={}'.format(eval_list,i+1))
                     self.metrics['worker_trainer'] = self.worker_trainer
+                    if hasattr(self.strategy,'tmp_unsup'):
+                        self.metrics['tmp_sup'] = self.strategy.tmp_sup
+                        self.metrics['tmp_unsup'] = self.strategy.tmp_unsup
                     self.metrics = self.evaluation.run(eval_list, self.metrics, metric_logger=run.log)
                     self.losses = self.evaluation.losses
                     eval_list = []

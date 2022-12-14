@@ -1,0 +1,95 @@
+# Basic configuration file for running semisupervision with data loaded on-the-fly
+# Parameters needed to initialize the model
+model_config:
+    model_type: Res                               # class w/ `loss` and `inference` methods
+    model_folder: experiments/semisupervision/model.py         # file containing class
+    num_classes: 100
+
+# Configuration for differential privacy
+dp_config:
+    enable_local_dp: false                             # whether to enable user-level DP
+
+# Additional privacy metrics
+privacy_metrics_config:
+    apply_metrics: false                               # cache data to compute additional metrics
+
+# Select the Federated optimizer to use (e.g. DGA or FedAvg)
+strategy: FedLabels
+
+# Determines all the server-side settings for training and evaluation rounds
+server_config:
+    send_dicts: true                                   # if true, the server will update model dictionaries instead of grads
+    wantRL: false                                      # whether to use RL-based meta-optimizers
+    resume_from_checkpoint: true                      # restart from checkpoint if file exists
+    do_profiling: false                                # run profiler and compute runtime metrics
+    optimizer_config:                                  # this is the optimizer used to update the model
+        type: sgd
+        lr: 1.0
+    annealing_config:                                  # annealer for the learning rate
+        type: step_lr
+        step_interval: epoch
+        gamma: 1.0
+        step_size: 100
+    val_freq: 1                                       # how many iterations between metric eval on val set
+    rec_freq: 5000                                      # how many iterations between metric eval on test set
+    initial_val: true
+    initial_rec: false
+    max_iteration: 2000                                # how many iterations in total
+    num_clients_per_iteration: 10                     # how many clients per iteration
+    data_config:                                       # where to get val and test data from
+        val:
+            batch_size: 64
+            val_data: null
+        test:
+            batch_size: 64
+            test_data: null
+    type: model_optimization
+    aggregate_median: softmax                          # how aggregations weights are computed
+    softmax_beta: 20.0
+    initial_lr_client: 0.003                           # learning rate used on client optimizer
+    lr_decay_factor: 1.0
+    weight_train_loss: train_loss
+    best_model_criterion: loss
+    fall_back_to_best_model: false
+
+# Dictates the learning parameters for client-side model updates. Train data is defined inside this config.
+client_config:
+    do_profiling: false                                # run profiling and compute runtime metrics
+    ignore_subtask: false
+    data_config:                                       # where to get training data from
+        train:
+            batch_size: 64
+            list_of_train_data: null
+            desired_max_samples: 87000
+    optimizer_config:                                  # this is the optimizer used by the client
+        type: sgd 
+        lr: 0.003                                      # this is overridden by `initial_lr_client`
+        momentum: 0
+    type: optimization
+    semisupervision:
+        uda: 1
+        num_classes: 100
+        isclust: 0
+        alpha: 0.1
+        train_ratio: 0.2
+        test_ratio: 0.0
+        val_ratio: 0.8
+        vat_ptb: 0
+        vat_consis: 0.05
+        lamb_consist: 0.05
+        unsup_lamb: 1
+        l2_lambda: 10
+        burnout_round: 50 
+        thre: 0.3
+        comp: var
+        eta: 0.003
+        bs: 64
+        unl_bs: 128
+        train_ep: 30
+        unsuptrain_ep: 10
+        ensize: 100
+        seed: 0
+        temp: 1
+        device: cuda
+        size: 10
+        shuffle: 1

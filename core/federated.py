@@ -292,12 +292,13 @@ class Server:
             profiler.enable()
 
         # Update lr + model parameters each round for all workers
-        lr, model_params = server_data
+        lr, model_params, nround = server_data
         for worker_rank in range(1, size()):
             _send(COMMAND_UPDATE, worker_rank)
             _send(lr,worker_rank)
             _send_gradients(model_params, worker_rank)
-            print_rank(f"Finished sending lr {lr} and n_params {len(model_params)} to worker {worker_rank}", loglevel=logging.DEBUG)
+            _send(float(nround),worker_rank)
+            print_rank(f"Finished sending lr {lr} and n_params {len(model_params)} to worker {worker_rank} - round {nround}", loglevel=logging.DEBUG)
 
         print_rank(f"Finished sending server_data to workers", loglevel=logging.DEBUG)
 
@@ -437,7 +438,7 @@ class Worker:
 
             # Initialize tensors -- required by torch.distributed
             command, client_idx, mode = 0, 0, 0  # int
-            lr = torch.zeros(1) # float
+            lr, nround = torch.zeros(1), torch.zeros(1) # float
 
             # Read command
             command = _recv(command)
@@ -448,8 +449,9 @@ class Worker:
                 print_rank(f"COMMMAND_UPDATE received {rank()}", loglevel=logging.DEBUG)                
                 lr = _recv(lr, 0)
                 model_params = _recv_gradients(0)
-                server_data = (lr, model_params)
-                print_rank(f"Received lr: {lr} and n_params: {len(model_params)}", loglevel=logging.DEBUG)
+                nround = _recv(nround, 0)
+                server_data = (lr, model_params, int(nround))
+                print_rank(f"Received lr: {lr} and n_params: {len(model_params)} - round {nround}", loglevel=logging.DEBUG)
                 
             elif command == COMMAND_TRAIN:
                 print_rank(f"COMMMAND_TRAIN received {rank()}", loglevel=logging.DEBUG)

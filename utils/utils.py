@@ -616,4 +616,66 @@ def alpha_update(model_global, model_personal, alpha, eta):
 
     return alpha_n if np.isfinite(alpha_n) else 0.75
 
+# Semi-supervision Routines
+def get_label_VAT(local_logits, server_logits, thre, comp):
+    """" Returns the estimated labels to SemiSupervision Task """
+    bs = np.shape(local_logits)[0]
+    logit_dim = np.shape(local_logits)[1]
+    labels = []
+    idx = []
+    var = []
+
+    if comp == 'var':
+        local_var = torch.var(local_logits, dim=1)
+        server_var = torch.var(server_logits, dim=1)
+
+        server = 0
+        local = 0
+        ratio = 0
+
+        for bs_i in range(bs):
+            if local_var[bs_i] >= server_var[bs_i] and torch.max(local_logits[bs_i]) > thre:
+                labels.append(torch.argmax(local_logits[bs_i]))
+                idx.append(bs_i)
+                var.append((server_var[bs_i]) / (local_var[bs_i]))
+                local += 1
+            if local_var[bs_i] < server_var[bs_i] and torch.max(server_logits[bs_i]) > thre:
+                labels.append(torch.argmax(server_logits[bs_i]))
+                idx.append(bs_i)
+                var.append((local_var[bs_i]) / (server_var[bs_i]))
+                server += 1
+
+        if len(labels) != 0:
+            labels = torch.stack(labels)
+            var = torch.stack(var)
+            ratio = server / (server + local)
+
+    elif comp == 'ent':
+        local_var = scipyst.entropy(local_logits.cpu(), axis=1)+0.00001
+        server_var = scipyst.entropy(server_logits.cpu(), axis=1)+0.00001
+
+        server = 0
+        local = 0
+        ratio = 0
+
+        for bs_i in range(bs):
+            if 1/local_var[bs_i]>= 1/server_var[bs_i] and torch.max(local_logits[bs_i])>thre:
+                labels.append(torch.argmax(local_logits[bs_i]))
+                idx.append(bs_i)
+                var.append((1/server_var[bs_i])/(1/local_var[bs_i]))
+                local += 1
+            if 1/local_var[bs_i]< 1/server_var[bs_i] and torch.max(server_logits[bs_i])>thre:
+                labels.append(torch.argmax(server_logits[bs_i]))
+                idx.append(bs_i)
+                var.append((1/local_var[bs_i])/(1/server_var[bs_i]))
+                server += 1
+
+        if len(labels) != 0:
+            labels = torch.stack(labels)
+            #var = torch.stack(var)
+            ratio = server/(server+local)
+
+    return labels, idx, var, ratio
+
+
 

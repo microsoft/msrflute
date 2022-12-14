@@ -107,17 +107,15 @@ def run_worker(model_path, config, task, data_path, local_rank, backend):
     model = make_model(model_config)
 
     # Get evaluation datasets
-    data_config = config['server_config']['data_config']
-    val_dataset = get_dataset(data_path, data_config["val"], task, mode="val", test_only=True)
-    test_dataset = get_dataset(data_path, data_config["test"], task, mode="test", test_only=True)
+    val_dataset = get_dataset(data_path, config, task, mode="val", test_only=True)
+    test_dataset = get_dataset(data_path, config, task, mode="test", test_only=True)
     
     # Create list of clients for test/val -- Server need the indexes and Worker the clients list
     val_clients = list(make_eval_clients(val_dataset, config))
     test_clients = list(make_eval_clients(test_dataset, config))
 
     # pre-cache the training data and capture the number of clients for sampling
-    client_train_config = config["client_config"]["data_config"]["train"]
-    num_clients = Client.get_train_dataset(data_path, client_train_config,task)
+    num_clients = Client.get_train_dataset(data_path, config, task)
     config["server_config"]["data_config"]["num_clients"] = num_clients
 
     # Instantiate the Server object on the first thread
@@ -125,8 +123,8 @@ def run_worker(model_path, config, task, data_path, local_rank, backend):
         try:
             print_rank('Server data preparation')
 
-            if 'train' in data_config:
-                server_train_dataloader = make_train_dataloader(data_config['train'], data_path, task=task, clientx=None)
+            if 'train' in config['client_config']['data_config']:
+                server_train_dataloader = make_train_dataloader(config['client_config']['data_config']['train'], data_path, task=task, clientx=None)
             else:
                 server_train_dataloader = None
 
@@ -148,7 +146,7 @@ def run_worker(model_path, config, task, data_path, local_rank, backend):
             server_type = server_config["type"]
             server_setup = select_server(server_type)  # Return the server class
             server = server_setup(
-                num_clients=data_config["num_clients"],
+                num_clients=config['server_config']['data_config']["num_clients"],
                 model=model,
                 optimizer=optimizer,
                 ss_scheduler=None,

@@ -6,9 +6,12 @@ import os
 import re
 import copy 
 
+import random
 import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+from torch.utils.data import DataLoader
 
 from core.metrics import Metrics
 from utils import \
@@ -20,8 +23,9 @@ from utils import \
     torch_save, \
     try_except_save, \
     write_yaml
-from utils.utils import to_device
-
+from utils.utils import (
+    to_device, 
+    get_label_VAT)
 
 class TrainerBase:
     """Abstract class defining Trainer objects' common interface.
@@ -307,7 +311,7 @@ class Trainer(TrainerBase):
             "norm": norm_grad
         }
 
-    def train_desired_samples(self, desired_max_samples=None, apply_privacy_metrics=False):
+    def train_desired_samples(self, desired_max_samples=None, apply_privacy_metrics=False, algo_payload = None):
         """Triggers training step.
 
         Args:
@@ -320,13 +324,17 @@ class Trainer(TrainerBase):
 
         num_samples = 0
         total_train_loss = 0
+        algo_computation = None
 
-        num_samples_per_epoch, train_loss_per_epoch = self.run_train_epoch(desired_max_samples, apply_privacy_metrics)
+        if algo_payload == None:
+            num_samples_per_epoch, train_loss_per_epoch = self.run_train_epoch(desired_max_samples, apply_privacy_metrics)
+        elif algo_payload['algo'] == 'FedLabels':
+            num_samples_per_epoch, train_loss_per_epoch, algo_computation = self.run_train_epoch_sup(desired_max_samples, apply_privacy_metrics, algo_payload)
 
         num_samples += num_samples_per_epoch
         total_train_loss += train_loss_per_epoch
 
-        return total_train_loss, num_samples
+        return total_train_loss, num_samples, algo_computation
 
     def run_train_epoch(self, desired_max_samples=None, apply_privacy_metrics=False):
         """Implementation example for training the model.
@@ -402,6 +410,124 @@ class Trainer(TrainerBase):
             self.lr_scheduler.step()
 
         return num_samples, sum_train_loss
+    
+    def run_train_epoch_sup(self, desired_max_samples=None, apply_privacy_metrics=False, algo_payload=None):
+        """Implementation example for training the model using semisupervision.
+
+        Args:
+            desired_max_samples (int): number of samples that you would like to process.
+            apply_privacy_metrics (bool): whether to save the batches used for the round for privacy metrics evaluation.
+            algo_payload (dict): datasets and configuration used during training for the FedLabels algorithm.
+
+        Returns:
+            3-tuple of (int, float, dict): number of processed samples, total training loss and unsupervised model state dict.
+        """
+
+        sum_train_loss = 0.0
+        num_samples = 0
+        round_ = algo_payload['iter']
+        semisupervision_config = algo_payload['config']
+        self.reset_gradient_power()
+
+        # Reset gradient just in case
+        self.model.zero_grad()
+
+        KL_pointLoss = torch.nn.KLDivLoss(reduction="none", log_target=True)
+        MSELoss = torch.nn.MSELoss()
+        Softmax = torch.nn.LogSoftmax(dim=1)
+        nolog_Softmax = torch.nn.Softmax(dim=1)
+        initial_net = copy.deepcopy(self.model)
+        loss_func = torch.nn.CrossEntropyLoss()
+
+        # Create datasets
+        normal_dataset, unsupdataset, unsupdataset_rand  = algo_payload['data'][0], algo_payload['data'][1], algo_payload['data'][2]
+        self.optimizer = torch.optim.SGD(self.model.parameters(), lr=0.003, momentum=0)
+
+        for i in range(int(semisupervision_config['train_ep'])):
+            sup_train = DataLoader(normal_dataset, batch_size=64, shuffle=True)
+            data_sup = iter(sup_train)
+            (images, labels) = next(data_sup)
+            self.model.zero_grad()
+            labels = to_device(labels)
+            log_probs = self.model(to_device(images))
+            loss = loss_func(log_probs, labels)
+            num_samples+= len(labels)
+            sum_train_loss += loss.item()
+            loss.backward()
+            self.optimizer.step()
+
+        self.estimate_sufficient_stats()
+        self.step += 1 # Update the counters
+        print_rank("step: {}, loss: {}".format(self.step, loss.item()), loglevel=logging.DEBUG)
+
+        net = copy.deepcopy(initial_net)
+        optimizer = torch.optim.SGD(net.parameters(), lr=semisupervision_config['eta'], momentum=0)
+        total_est_labels = 0
+        total_est_ratios = 0
+        correct = 0
+
+        if round_ >= semisupervision_config['burnout_round']:
+            for _ in range(int(semisupervision_config['unsuptrain_ep'])):
+                data_idx = random.sample(range(len(unsupdataset)), semisupervision_config['unl_bs']) 
+                partitioned = torch.utils.data.Subset(unsupdataset, indices=data_idx)
+                ldr_train = DataLoader(partitioned, batch_size=semisupervision_config['bs'], shuffle=False)
+
+                (images, true_labels) = next(iter(ldr_train))
+                images, true_labels = to_device(images), to_device(true_labels)
+
+                initial_net.eval()
+                self.model.eval()
+
+                with torch.no_grad():
+                    output_local = initial_net(images).detach()
+                    output_server = self.model(images).detach()
+
+                local_logits = nolog_Softmax(output_local/semisupervision_config['temp'])
+                server_logits = nolog_Softmax(output_server / semisupervision_config['temp'])
+                est_labels, est_idx, est_var, est_ratio = get_label_VAT(local_logits, server_logits, semisupervision_config['thre'], semisupervision_config['comp'])
+                total_est_labels += len(est_labels)
+                total_est_ratios += est_ratio/semisupervision_config['unsuptrain_ep']
+
+                if len(est_labels) != 0:
+                    partitioned_rand = torch.utils.data.Subset(unsupdataset_rand, indices=data_idx)
+                    ldr_rand_train = DataLoader(partitioned_rand, batch_size=semisupervision_config['bs'], shuffle=False)
+                    (rand_images, _) = next(iter(ldr_rand_train))
+                    rand_images = to_device(rand_images)
+
+                    correct += ((est_labels == true_labels[est_idx]).sum().item()) / (
+                                len(est_idx) * semisupervision_config['unsuptrain_ep'])
+
+                    lamb_consist = semisupervision_config['vat_consis']
+                    net.train()
+
+                    output = net(rand_images[est_idx]) if semisupervision_config['uda'] == 1 else net(images[est_idx])
+                    output_norand = net(images[est_idx])
+
+                    # Compute Losses, this should go inside model.py
+                    unsup_loss = loss_func(output, est_labels)
+                    kl_point_loss = KL_pointLoss(Softmax(output_norand / semisupervision_config['temp']), Softmax(output_server[est_idx]/semisupervision_config['temp']))
+                    consist_loss = torch.tensor(0.0, requires_grad=True)
+                    consist_tmp = torch.tensor(0.0)
+
+                    for i in range(len(est_var)):
+                        if torch.argmax(local_logits[est_idx[i]]) == torch.argmax(server_logits[est_idx[i]]):
+                            dummy = kl_point_loss[i]*est_var[i]
+                            consist_tmp += 1
+                            consist_loss = consist_loss+ dummy.sum()
+
+                    if consist_tmp != torch.tensor(0.0):
+                        consist_loss = consist_loss/consist_tmp
+
+                    l2_lambda = semisupervision_config['l2_lambda']
+                    initial_net.eval()
+                    reg_loss = torch.tensor(0., requires_grad=True)
+                    for p, prev_param in zip(net.parameters(), initial_net.parameters()):
+                        reg_loss = reg_loss + MSELoss(p, prev_param)
+
+                    (semisupervision_config['unsup_lamb']*unsup_loss + lamb_consist*consist_loss+l2_lambda*reg_loss).backward(retain_graph=True)
+                    optimizer.step()
+
+        return total_est_labels, sum_train_loss/semisupervision_config['ensize'], net.state_dict()
 
     def get_model(self):
         return copy.deepcopy(self.model)
@@ -503,7 +629,7 @@ def run_validation_generic(model, val_dataloader):
         loglevel=logging.DEBUG
     )
 
-    print_rank("Loading metrics ...")
+    print_rank("Loading metrics ...", logging.DEBUG)
     metrics_cl = Metrics()
     return metrics_cl.compute_metrics(dataloader=val_loader, model=model)
 
