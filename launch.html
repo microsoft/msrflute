@@ -81,7 +81,7 @@
 <p>Install the requirements stated inside of requirements.txt. Ideally this sould be done inside of a virtual environment, for instance, using Anaconda.</p>
 <p>FLUTE uses torch.distributed API as its main communication backbone, supporting three buil-in backends. For more information please refer to [Distributed Communication Package](<a class="reference external" href="https://pytorch.org/docs/stable/distributed.html">https://pytorch.org/docs/stable/distributed.html</a>). Therefore, we highly suggest to use NCCL backend for distributed GPU training and Gloo for distributed CPU training. There is no <cite>setup.py</cite> as FLUTE is not currently distributed as a package, but instead meant to run from the root of the repository.</p>
 <p>After this initial setup you can use your data for launching a local run. However the following instructions will be adapted to run <code class="docutils literal notranslate"><span class="pre">nlg_gru</span></code> task. For running this example, you need to first download and preprocess the data. Instructions can be found <a class="reference external" href="https://github.com/microsoft/msrflute/tree/main/testing">here</a>.  Once the data is available you can run FLUTE from root as follows:</p>
-<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python -m torch.distributed.run --nproc_per_node<span class="o">=</span><span class="m">3</span> e2e_trainer.py -dataPath ./testing/mockup -outputPath scratch  -config testing/configs/hello_world_local.yaml -task nlg_gru -backend nccl
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python<span class="w"> </span>-m<span class="w"> </span>torch.distributed.run<span class="w"> </span>--nproc_per_node<span class="o">=</span><span class="m">3</span><span class="w"> </span>e2e_trainer.py<span class="w"> </span>-dataPath<span class="w"> </span>./testing/mockup<span class="w"> </span>-outputPath<span class="w"> </span>scratch<span class="w">  </span>-config<span class="w"> </span>testing/configs/hello_world_local.yaml<span class="w"> </span>-task<span class="w"> </span>nlg_gru<span class="w"> </span>-backend<span class="w"> </span>nccl
 </pre></div>
 </div>
 <p>If the setup of the experiment has been done correctly, after the model initialization we would be able to see the clients being trained:</p>
@@ -96,28 +96,28 @@
 <h2>AML Run<a class="headerlink" href="#aml-run" title="Permalink to this headline">¶</a></h2>
 <p>FLUTE has a native integration for job submissions with Azure ML, allowing users to use the built-in CLI or web interface for job/experiment tracking.</p>
 <p>For running experiments on AzureML, the CLI can help. You should first install the CLI <a class="reference external" href="https://docs.microsoft.com/en-us/azure/machine-learning/reference-azure-machine-learning-cli">install the CLI</a> (make sure you have v2) and <a class="reference external" href="https://docs.microsoft.com/en-us/azure/machine-learning/how-to-manage-workspace-cli?tabs=vnetpleconfigurationsv1cli%2Ccreatenewresources%2Cworkspaceupdatev1%2Cworkspacesynckeysv1%2Cworkspacedeletev1">create a resource group and workspace</a>. You can then create a compute cluster, type <code class="docutils literal notranslate"><span class="pre">az</span> <span class="pre">ml</span> <span class="pre">compute</span> <span class="pre">create</span> <span class="pre">-h</span></code> for more info. Afterwards, you should write a YAML file with instructions for the job; we provide a simple example below:</p>
-<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">experiment_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">basic_example</span><span class="w"></span>
-<span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Basic example of AML config for submitting FLUTE jobs</span><span class="w"></span>
-<span class="nt">code</span><span class="p">:</span><span class="w"></span>
-<span class="nt">local_path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">.</span><span class="w"></span>
-<span class="nt">compute</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">azureml:Test</span><span class="w"></span>
-<span class="nt">environment</span><span class="p">:</span><span class="w"></span>
-<span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pytorch/pytorch:1.9.0-cuda10.2-cudnn7-devel</span><span class="w"></span>
-<span class="nt">inputs</span><span class="p">:</span><span class="w"></span>
-<span class="nt">data</span><span class="p">:</span><span class="w"></span>
-<span class="w">    </span><span class="nt">folder</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">azureml://datastores/data/paths/cifar</span><span class="w"></span>
-<span class="w">    </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">rw_mount</span><span class="w"></span>
-<span class="nt">command</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">&gt;</span><span class="w"></span>
-<span class="l l-Scalar l-Scalar-Plain">apt -y update &amp;&amp;</span><span class="w"></span>
-<span class="l l-Scalar l-Scalar-Plain">apt -y install openmpi-bin libopenmpi-dev openssh-client &amp;&amp;</span><span class="w"></span>
-<span class="l l-Scalar l-Scalar-Plain">python3 -m pip install --upgrade pip &amp;&amp;</span><span class="w"></span>
-<span class="l l-Scalar l-Scalar-Plain">python3 -m pip install -r requirements.txt &amp;&amp;</span><span class="w"></span>
-<span class="l l-Scalar l-Scalar-Plain">python -m torch.distributed.run --nproc_per_node=4 e2e_trainer.py</span><span class="w"></span>
-<span class="l l-Scalar l-Scalar-Plain">-outputPath=./outputs</span><span class="w"></span>
-<span class="l l-Scalar l-Scalar-Plain">-dataPath={inputs.data}</span><span class="w"></span>
-<span class="l l-Scalar l-Scalar-Plain">-task=classif_cnn</span><span class="w"></span>
-<span class="l l-Scalar l-Scalar-Plain">-config=./experiments/classif_cnn/config.yaml</span><span class="w"></span>
-<span class="l l-Scalar l-Scalar-Plain">-backend=nccl</span><span class="w"></span>
+<div class="highlight-yaml notranslate"><div class="highlight"><pre><span></span><span class="nt">experiment_name</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">basic_example</span>
+<span class="nt">description</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">Basic example of AML config for submitting FLUTE jobs</span>
+<span class="nt">code</span><span class="p">:</span>
+<span class="nt">local_path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">.</span>
+<span class="nt">compute</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">azureml:Test</span>
+<span class="nt">environment</span><span class="p">:</span>
+<span class="nt">image</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">pytorch/pytorch:1.9.0-cuda10.2-cudnn7-devel</span>
+<span class="nt">inputs</span><span class="p">:</span>
+<span class="nt">data</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">folder</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">azureml://datastores/data/paths/cifar</span>
+<span class="w">    </span><span class="nt">mode</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">rw_mount</span>
+<span class="nt">command</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">&gt;</span>
+<span class="l l-Scalar l-Scalar-Plain">apt -y update &amp;&amp;</span>
+<span class="l l-Scalar l-Scalar-Plain">apt -y install openmpi-bin libopenmpi-dev openssh-client &amp;&amp;</span>
+<span class="l l-Scalar l-Scalar-Plain">python3 -m pip install --upgrade pip &amp;&amp;</span>
+<span class="l l-Scalar l-Scalar-Plain">python3 -m pip install -r requirements.txt &amp;&amp;</span>
+<span class="l l-Scalar l-Scalar-Plain">python -m torch.distributed.run --nproc_per_node=4 e2e_trainer.py</span>
+<span class="l l-Scalar l-Scalar-Plain">-outputPath=./outputs</span>
+<span class="l l-Scalar l-Scalar-Plain">-dataPath={inputs.data}</span>
+<span class="l l-Scalar l-Scalar-Plain">-task=classif_cnn</span>
+<span class="l l-Scalar l-Scalar-Plain">-config=./experiments/classif_cnn/config.yaml</span>
+<span class="l l-Scalar l-Scalar-Plain">-backend=nccl</span>
 </pre></div>
 </div>
 <p>You should replace <code class="docutils literal notranslate"><span class="pre">compute</span></code> with the name of the one you created before, and adjust the path of the datastore containing the data. In the example above, we created a datastore called <code class="docutils literal notranslate"><span class="pre">data</span></code> and added to it a folder called <code class="docutils literal notranslate"><span class="pre">cifar</span></code>, which contained the two HDF5 files. The command passed above will install dependencies and then launch a NCCL job with 4 threads, for the experiment defined in <code class="docutils literal notranslate"><span class="pre">experiments/classif_cnn</span></code>. Details on how to run a job using the AzureML CLI are given in its <a class="reference external" href="https://docs.microsoft.com/en-us/azure/machine-learning/how-to-train-cli">documentation</a> , but typically it suffices to set up the environment and type <code class="docutils literal notranslate"><span class="pre">az</span> <span class="pre">ml</span> <span class="pre">job</span> <span class="pre">create</span> <span class="pre">-f</span> <span class="pre">&lt;name-of-the-yaml-file&gt;</span></code>. In the same page of the documentation, you can also find more info about how to set up the YAML file above, in case other changes are needed.</p>
