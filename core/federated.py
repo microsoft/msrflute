@@ -1,6 +1,7 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 
+import os
 import cProfile
 import logging
 
@@ -41,11 +42,15 @@ def encode_string(word, string_to_int = True):
 
 def rank():
     """ Return rank of node. """
-    return dist.get_rank()
+    return int(os.environ['RANK'])
+
+def local_rank():
+    """ Return local rank of node. """
+    return int(os.environ['LOCAL_RANK'])
 
 def size():
     """ Returns number of nodes in the distributed group, including server. """
-    return dist.get_world_size()
+    return int(os.environ['WORLD_SIZE'])
 
 def _recv(x, src=0):
     """ Receives tensors with a single element or a list of tensors 
@@ -213,7 +218,7 @@ def append_async_requests(node_request_map, node):
     """ Appends the asynchronous request sent to each worker during 
     asynchronous training. """
 
-    ack = to_device(torch.zeros(1))
+    ack = to_device(torch.tensor(1))
     req = dist.irecv(tensor=ack, src=node)
     node_request_map.append((node,req))
     return node_request_map

@@ -244,7 +244,7 @@ class Client:
 
         # Ensure the client is assigned to the correct GPU
         if torch.cuda.is_available() and torch.cuda.device_count() == federated.size():
-            torch.cuda.set_device(federated.rank())
+            torch.cuda.set_device(federated.local_rank())
 
         # Process inputs and initialize variables
         client_id, data_strcts, config, send_gradients = client_data

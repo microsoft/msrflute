@@ -88,20 +88,16 @@ def run_worker(model_path, config, task, data_path, local_rank, backend):
     server_config = config["server_config"]
 
     # Backend initialization
+    WORLD_RANK = federated.rank()
+    LOCAL_RANK = federated.local_rank()
     print_rank(f"Backend: {backend}")
-    dist.init_process_group(backend=backend, init_method=None)
-    rank = dist.get_rank()
-    if torch.cuda.is_available():
-        torch.cuda.set_device(rank)
-
-    # Get the rank on NCCL/GLOO
-    rank = local_rank if local_rank > -1 else federated.rank()
+    dist.init_process_group(backend=backend, init_method=None, rank=WORLD_RANK, world_size=federated.size())
 
     # Assign NCCL thread to a specific GPU
     if torch.cuda.is_available():
-        n_gpus = torch.cuda.device_count()
-        torch.cuda.set_device(federated.rank() % n_gpus)
-        print_rank(f"Assigning worker to GPU {federated.rank() % n_gpus}")
+        print_rank(f"Assigning worker to GPU {LOCAL_RANK}")
+        device = torch.device("cuda:{}".format(LOCAL_RANK))
+        torch.cuda.set_device(device)
 
     # Make the Model to distribute to workers
     model = make_model(model_config)
@@ -119,7 +115,7 @@ def run_worker(model_path, config, task, data_path, local_rank, backend):
     config["server_config"]["data_config"]["num_clients"] = num_clients
 
     # Instantiate the Server object on the first thread
-    if rank == 0:
+    if WORLD_RANK == 0:
         try:
             print_rank('Server data preparation')
 
@@ -169,7 +165,7 @@ def run_worker(model_path, config, task, data_path, local_rank, backend):
 
     else:
         # Instantiate client-processing Worker on remaining threads
-        print_rank("Worker on node {}: process started".format(rank))
+        print_rank("Worker on node {}: process started".format(WORLD_RANK))
         client_config = config["client_config"]
         worker = federated.Worker(
             model=model,
