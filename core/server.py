@@ -118,7 +118,7 @@ class OptimizationServer(federated.Server):
             model=model,
             optimizer=optimizer,
             ss_scheduler=ss_scheduler,
-            train_dataloader=server_train_dataloader if server_train_dataloader is not None else None,
+            train_dataloader=server_train_dataloader,
             val_dataloader=None,
             max_grad_norm=max_grad_norm,
             anneal_config=server_config['annealing_config'],
@@ -142,11 +142,11 @@ class OptimizationServer(federated.Server):
                 ss_scheduler=ss_scheduler,
                 train_dataloader=server_train_dataloader,
                 server_replay_config=server_config['server_replay_config'],
-                val_dataloader=None,
                 max_grad_norm=server_config['server_replay_config']\
                                             .get('max_grad_norm',server_config['data_config']['train']\
                                                 .get('max_grad_norm',None)),
-                anneal_config=server_config['server_replay_config'].get('annealing_config', None)
+                anneal_config=server_config['server_replay_config'].get('annealing_config', None),
+                ignore_subtask = server_config['server_replay_config'].get('ignore_subtask', False)
             )
 
         self.skip_model_update = False  # will not update the model if True

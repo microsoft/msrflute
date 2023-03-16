@@ -53,6 +53,7 @@ class Metrics():
                 for q in inf_results.keys():
                     sum_metrics[q].append(inf_results[q]['value']* batch_size)
                 counter += batch_size
+                torch.cuda.empty_cache()
 
         output_tot["probabilities"] = np.concatenate(output_tot["probabilities"]) if output_tot["probabilities"] else []
         output_tot["predictions"] = np.concatenate(output_tot["predictions"]) if output_tot["predictions"] else []
@@ -67,5 +68,6 @@ class Metrics():
             metrics[k]['value'] = sum(sum_metrics[k])/counter
 
         print_rank(f"validation examples {counter}", loglevel=logging.DEBUG)
-                    
+        torch.cuda.empty_cache()
+        
         return output_tot, metrics

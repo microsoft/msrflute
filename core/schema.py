@@ -161,7 +161,6 @@
                             'allow_unknown': True,
                             'schema': {
                                 'batch_size': {'required': False, 'type':'integer', 'default': 40},
-                                'train_data': {'required': True, 'type':'string'},
                                 'train_data_server': {'required': False, 'type':'string'},
                                 'desired_max_samples': {'required': False, 'type':'integer'},
                                 'tokenizer_type': {'required': False, 'type':'string'},
@@ -196,11 +195,10 @@
                     'required': False, 
                     'type':'dict',
                     'schema':{
-                        'server_iterations': {'required': True, 'type':'integer', 'dependencies': 'data_config.train.train_data_server'},
+                        'server_iterations': {'required': True, 'type':'integer'},
                         'optimizer_config': {
                             'required': True, 
                             'type':'dict',
-                            'dependencies': 'data_config.train.train_data_server',
                             'allow_unknown': True,
                             'schema': {
                                 'type': {'required': True, 'type':'string', 'allowed':['sgd', 'adam','adamax', 'lars', 'LarsSGD', 'lamb', 'adamW']},

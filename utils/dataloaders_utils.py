@@ -22,7 +22,7 @@ def get_exp_dataloader(task):
 
     return loader
 
-def make_train_dataloader(data_config, data_path, clientx, task=None, vec_size=300, data_strct=None):
+def make_train_dataloader(data_config, data_path, clientx, task=None, vec_size=300, data_strct=None, replay_server=False):
     """ Create a dataloader for training on either server or client side """
 
     mode = 'train'
@@ -34,7 +34,8 @@ def make_train_dataloader(data_config, data_path, clientx, task=None, vec_size=3
             print_rank("No server training set is defined")
             return None
         my_data = os.path.join(data_path, data_config["train_data_server"])
-        mode='val'
+        mode='val' # Only for replay_server
+        clientx = 0 # Only for replay_server
         
     # Training list on a client side
     else:  
@@ -52,7 +53,6 @@ def make_train_dataloader(data_config, data_path, clientx, task=None, vec_size=3
                                     )
 
     return train_dataloader
-
 
 
 def make_val_dataloader(data_config, data_path, task=None, data_strct=None, train_mode=False):

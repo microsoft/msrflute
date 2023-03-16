@@ -11,7 +11,7 @@ sphinx_rtd_theme
 azureml-core
 azureml-defaults
 pyyaml
-sklearn
+scikit-learn
 cerberus
 protobuf
 sentencepiece

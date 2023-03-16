@@ -119,8 +119,8 @@ def run_worker(model_path, config, task, data_path, local_rank, backend):
         try:
             print_rank('Server data preparation')
 
-            if 'train' in config['client_config']['data_config']:
-                server_train_dataloader = make_train_dataloader(config['client_config']['data_config']['train'], data_path, task=task, clientx=None)
+            if 'train' in config['server_config']['data_config']:
+                server_train_dataloader = make_train_dataloader(config['server_config']['data_config']['train'], data_path, task=task, clientx=None)
             else:
                 server_train_dataloader = None
 

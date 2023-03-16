@@ -66,7 +66,7 @@ You can find the example above in the [cv_lr_mnist](experiments/cv_lr_mnist/) fo
 Install the requirements stated inside of `requirements.txt`. Ideally this sould be done inside of a virtual environment, for instance, using Anaconda.
 
 ```
-conda create -n FLUTE python==3.8
+conda create -n FLUTE python==3.7
 pip install -r requirements.txt
 ```
 
