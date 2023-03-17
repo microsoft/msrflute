@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html class="writer-html5" lang="en" >
 <head>
-  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Launch FLUTE &mdash; FLUTE  documentation</title><link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
@@ -26,11 +26,15 @@
     <nav data-toggle="wy-nav-shift" class="wy-nav-side">
       <div class="wy-side-scroll">
         <div class="wy-side-nav-search" >
-            <a href="index.html" class="icon icon-home"> FLUTE
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            FLUTE
           </a>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
-    <input type="text" name="q" placeholder="Search docs" />
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
     <input type="hidden" name="check_keywords" value="yes" />
     <input type="hidden" name="area" value="default" />
   </form>
@@ -63,7 +67,7 @@
         <div class="rst-content">
           <div role="navigation" aria-label="Page navigation">
   <ul class="wy-breadcrumbs">
-      <li><a href="index.html" class="icon icon-home"></a></li>
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
       <li class="breadcrumb-item active">Launch FLUTE</li>
       <li class="wy-breadcrumbs-aside">
             <a href="_sources/launch.rst.txt" rel="nofollow"> View page source</a>
@@ -85,10 +89,10 @@
 </pre></div>
 </div>
 <p>If the setup of the experiment has been done correctly, after the model initialization we would be able to see the clients being trained:</p>
-<figure class="align-center" id="id1">
+<figure class="align-center" id="figure-1">
 <a class="reference internal image-reference" href="_images/run.png"><img alt="_images/run.png" src="_images/run.png" style="width: 800px;" /></a>
 <figcaption>
-<p><span class="caption-text">Local run for nlg_gru task.</span><a class="headerlink" href="#id1" title="Permalink to this image">¶</a></p>
+<p><span class="caption-text">Local run for nlg_gru task.</span><a class="headerlink" href="#figure-1" title="Permalink to this image">¶</a></p>
 </figcaption>
 </figure>
 </section>
@@ -124,11 +128,11 @@
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>The local_path above is relative to the location of the YAML file. Setting it to <code class="docutils literal notranslate"><span class="pre">.</span></code> assumes it is in the same folder as <code class="docutils literal notranslate"><span class="pre">e2e_trainer.py</span></code>.</p>
-</div>
+</aside>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>All files on this folder will be uploaded to Azure, including hidden folders such as <code class="docutils literal notranslate"><span class="pre">.git</span></code>, make sure to remove large files and folders that are not needed.</p>
-</div>
+</aside>
 <p>After launching the experiment, you can follow it on AzureML Studio, which prints logs, plots metrics and makes the output easily available after the experiment is finished.</p>
 </section>
 </section>

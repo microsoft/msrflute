@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html class="writer-html5" lang="en" >
 <head>
-  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>FLUTE Overview &mdash; FLUTE  documentation</title><link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
@@ -26,11 +26,15 @@
     <nav data-toggle="wy-nav-shift" class="wy-nav-side">
       <div class="wy-side-scroll">
         <div class="wy-side-nav-search" >
-            <a href="index.html" class="icon icon-home"> FLUTE
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            FLUTE
           </a>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
-    <input type="text" name="q" placeholder="Search docs" />
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
     <input type="hidden" name="check_keywords" value="yes" />
     <input type="hidden" name="area" value="default" />
   </form>
@@ -62,7 +66,7 @@
         <div class="rst-content">
           <div role="navigation" aria-label="Page navigation">
   <ul class="wy-breadcrumbs">
-      <li><a href="index.html" class="icon icon-home"></a></li>
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
       <li class="breadcrumb-item active">FLUTE Overview</li>
       <li class="wy-breadcrumbs-aside">
             <a href="_sources/overview.rst.txt" rel="nofollow"> View page source</a>
@@ -77,10 +81,10 @@
 <h1>FLUTE Overview<a class="headerlink" href="#flute-overview" title="Permalink to this headline">¶</a></h1>
 <p>FLUTE: Federated Learning Utilities and Tools for Experimentation is a high-performance open source platform that enables researchers and developers to perform rapid prototyping and offline simulations of novel federated learning algorithms at scale.</p>
 <p>An FLUTE job consists of one or more nodes (physical or virtual machines) executing a total of K workers that can become a Server or Client.</p>
-<figure class="align-center" id="id1">
+<figure class="align-center" id="figure-1">
 <a class="reference internal image-reference" href="_images/client-server.png"><img alt="_images/client-server.png" src="_images/client-server.png" style="width: 600px;" /></a>
 <figcaption>
-<p><span class="caption-text">FLUTE uses a distributed processing architecture backed by torch.distributed.</span><a class="headerlink" href="#id1" title="Permalink to this image">¶</a></p>
+<p><span class="caption-text">FLUTE uses a distributed processing architecture backed by torch.distributed.</span><a class="headerlink" href="#figure-1" title="Permalink to this image">¶</a></p>
 </figcaption>
 </figure>
 <p>Worker 0 acts as a central orchestrator, maintaining and distributing the central model to workers, and subsequently distributing client tasks to them. On each training round the orchestrator takes care of:</p>
@@ -102,14 +106,14 @@
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>AzureML generally expects there will be one worker per GPU on each node.</p>
-</div>
+</aside>
 <section id="architecture">
 <h2>Architecture<a class="headerlink" href="#architecture" title="Permalink to this headline">¶</a></h2>
 <p>FLUTE design is based on a central server architecture.</p>
-<figure class="align-center" id="id2">
+<figure class="align-center" id="figure-2">
 <a class="reference internal image-reference" href="_images/architecture.png"><img alt="_images/architecture.png" src="_images/architecture.png" style="width: 500px;" /></a>
 <figcaption>
-<p><span class="caption-text">FLUTE logical workflow.</span><a class="headerlink" href="#id2" title="Permalink to this image">¶</a></p>
+<p><span class="caption-text">FLUTE logical workflow.</span><a class="headerlink" href="#figure-2" title="Permalink to this image">¶</a></p>
 </figcaption>
 </figure>
 <p>The logical workflow performed is:</p>

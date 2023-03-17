@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html class="writer-html5" lang="en" >
 <head>
-  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.17.1: http://docutils.sourceforge.net/" />
+  <meta charset="utf-8" /><meta name="generator" content="Docutils 0.18.1: http://docutils.sourceforge.net/" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Adding New Scenarios &mdash; FLUTE  documentation</title><link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
@@ -26,11 +26,15 @@
     <nav data-toggle="wy-nav-shift" class="wy-nav-side">
       <div class="wy-side-scroll">
         <div class="wy-side-nav-search" >
-            <a href="index.html" class="icon icon-home"> FLUTE
+
+          
+          
+          <a href="index.html" class="icon icon-home">
+            FLUTE
           </a>
 <div role="search">
   <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
-    <input type="text" name="q" placeholder="Search docs" />
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
     <input type="hidden" name="check_keywords" value="yes" />
     <input type="hidden" name="area" value="default" />
   </form>
@@ -65,7 +69,7 @@
         <div class="rst-content">
           <div role="navigation" aria-label="Page navigation">
   <ul class="wy-breadcrumbs">
-      <li><a href="index.html" class="icon icon-home"></a></li>
+      <li><a href="index.html" class="icon icon-home" aria-label="Home"></a></li>
       <li class="breadcrumb-item active">Adding New Scenarios</li>
       <li class="wy-breadcrumbs-aside">
             <a href="_sources/scenarios.rst.txt" rel="nofollow"> View page source</a>
@@ -114,11 +118,11 @@ Here is a sample data blob for language model training.</p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>Test and validation data is formatted similarly.</p>
-</div>
+</aside>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>Test/validate data is dispatched to workers by partitioning on users. If your test data isn’t user-partitioned, we recommend partitioning it uniformly using some dummy user ids.</p>
-</div>
+</aside>
 </section>
 <section id="add-the-model-to-flute">
 <h2>Add the model to FLUTE<a class="headerlink" href="#add-the-model-to-flute" title="Permalink to this headline">¶</a></h2>
@@ -180,11 +184,11 @@ Here is a sample data blob for language model training.</p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>In case you need to import a module that has not been considered in FLUTE, this can be added in requirements.txt</p>
-</div>
+</aside>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>All files must contain only absolute imports, in order to avoid issues when running.</p>
-</div>
+</aside>
 </section>
 <section id="implement-new-metrics">
 <h2>Implement new metrics<a class="headerlink" href="#implement-new-metrics" title="Permalink to this headline">¶</a></h2>
@@ -208,7 +212,7 @@ Here is a sample data blob for language model training.</p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>Only the keys <cite>output</cite>, <cite>acc</cite> and <cite>batch_size</cite> does not require a dictionary.</p>
-</div>
+</aside>
 </section>
 <section id="create-the-configuration-file">
 <h2>Create the configuration file<a class="headerlink" href="#create-the-configuration-file" title="Permalink to this headline">¶</a></h2>
@@ -288,7 +292,7 @@ Here is a sample data blob for language model training.</p>
 <div class="admonition note">
 <p class="admonition-title">Note</p>
 <p>Documented templates for all the options available in the configuration files are provided inside configs folder.</p>
-</div>
+</aside>
 </section>
 </section>
 
