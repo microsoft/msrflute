@@ -38,3 +38,12 @@ about the new command, please refer to the [README](README.md).
 - 🌟 Abstract classes for new models/dataloaders.
 - 🌟 Allows Federated Learning with Personalization. 
   - Personalization allows you to leverage each client local data to obtain models that are better adjusted to their own data distribution. You can run the `cv` task in order to try out this feature.
+
+
+## [1.0.1] - 2023-07-29
+
+🔋 This release removes the restriction of the minimum number of GPUs available in FLUTE, 
+allowing users to run experiments using a single-GPU worker by instantiating both: Server
+and clients on the same device. For more documentation about how to run an experiments
+using a single GPU, please refer to the [README](README.md).
+

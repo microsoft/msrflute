@@ -46,7 +46,7 @@ run = Run.get_context()
 
 class OptimizationServer(federated.Server):
     def __init__(self, num_clients, model, optimizer, ss_scheduler, data_path, model_path, server_train_dataloader,
-                 config, idx_val_clients, idx_test_clients):
+                 config, idx_val_clients, idx_test_clients, single_worker):
         '''Implement Server's orchestration and aggregation.
 
         This is the main Server class, that actually implements orchestration
@@ -88,7 +88,7 @@ class OptimizationServer(federated.Server):
         self.val_freq = server_config['val_freq']
         self.req_freq = server_config['rec_freq']
 
-        self.evaluation = Evaluation(config, model_path, self.process_testvalidate, idx_val_clients, idx_test_clients)
+        self.evaluation = Evaluation(config, model_path, self.process_testvalidate, idx_val_clients, idx_test_clients, single_worker)
 
         # TODO: does this need to be adjusted for custom metrics?
         self.metrics = dict()
@@ -106,6 +106,7 @@ class OptimizationServer(federated.Server):
 
         self.list_of_train_data = config['client_config']['data_config']['train']['list_of_train_data']
         self.data_path = data_path
+        self.single_worker = single_worker
 
         # Get max grad norm from data config
         if 'train' in server_config['data_config']:
@@ -333,7 +334,7 @@ class OptimizationServer(federated.Server):
                 self.worker_trainer.model.zero_grad()
                 
                 print_rank(f"Clients sampled from server {sampled_idx_clients}", loglevel=logging.DEBUG)
-                for client_output in self.process_clients(sampled_idx_clients, server_data):
+                for client_output in self.process_clients(sampled_idx_clients, server_data, self.single_worker):
                     # Process client output
                     client_timestamp = client_output['ts']
                     client_stats = client_output['cs']

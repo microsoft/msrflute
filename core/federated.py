@@ -4,6 +4,7 @@
 import os
 import cProfile
 import logging
+import threading 
 
 import torch
 import torch.distributed as dist
@@ -21,6 +22,7 @@ COMMAND_TRAIN = 1
 COMMAND_TERMINATE = 10
 COMMAND_TESTVAL = 11
 COMMAND_SYNC_NODES = 9
+GLOBAL_MESSAGE = None
 
 def encode_string(word, string_to_int = True):
     """ Encodes/Decodes the dictionary keys into an array of integers to be sent 
@@ -254,7 +256,7 @@ class Server:
         is actually stored inside of the object.
     """
     @staticmethod
-    def dispatch_clients(clients, server_data, command, mode=None, do_profiling=False):
+    def dispatch_clients(clients, server_data, command, mode=None, do_profiling=False, single_worker=None):
         """Perform the orchestration between Clients and Workers.
 
         This function does the following:
@@ -285,6 +287,9 @@ class Server:
         Returns:
             Generator of results.
         """
+        # Single GPU flag
+        single_gpu = True if size()==1 else False
+        print_rank(f"Single GPU flag Server: {single_gpu}", loglevel=logging.DEBUG)
 
         # Some cleanup
         torch.cuda.empty_cache()
@@ -298,60 +303,81 @@ class Server:
 
         # Update lr + model parameters each round for all workers
         lr, model_params, nround = server_data
-        for worker_rank in range(1, size()):
-            _send(COMMAND_UPDATE, worker_rank)
-            _send(lr,worker_rank)
-            _send_gradients(model_params, worker_rank)
-            _send(float(nround),worker_rank)
-            print_rank(f"Finished sending lr {lr} and n_params {len(model_params)} to worker {worker_rank} - round {nround}", loglevel=logging.DEBUG)
-
-        print_rank(f"Finished sending server_data to workers", loglevel=logging.DEBUG)
-
-        client_queue = clients.copy()
-        print_rank(f"Clients queue: {client_queue}", loglevel=logging.DEBUG)
-        free_nodes = list(range(1, size()))
-        results_list, node_request_map = [], []
-
-        # Initiate computation for all clients
-        while client_queue:
+        if not single_gpu:
+            for worker_rank in range(1, size()):
+                _send(COMMAND_UPDATE, worker_rank)
+                _send(lr,worker_rank)
+                _send_gradients(model_params, worker_rank)
+                _send(float(nround),worker_rank)
+                print_rank(f"Finished sending lr {lr} and n_params {len(model_params)} to worker {worker_rank} - round {nround}", loglevel=logging.DEBUG)
+                print_rank(f"Finished sending server_data to workers", loglevel=logging.DEBUG)
+        
+            client_queue = clients.copy()
             print_rank(f"Clients queue: {client_queue}", loglevel=logging.DEBUG)
-            assert len(free_nodes) > 0
-            node = free_nodes.pop()
-            index = len(client_queue)-1
-            client_to_process = client_queue.pop(index) 
-            print_rank(f"Sending client {index} to worker {node}", loglevel=logging.DEBUG)
-            _send(command, node) # The command should indicate the worker which function to run on the client
+            free_nodes = list(range(1, size()))
+            results_list, node_request_map = [], []
+
+            # Initiate computation for all clients
+            while client_queue:
+                print_rank(f"Clients queue: {client_queue}", loglevel=logging.DEBUG)
+                assert len(free_nodes) > 0
+                node = free_nodes.pop()
+                index = len(client_queue)-1
+                client_to_process = client_queue.pop(index) 
+                print_rank(f"Sending client {index} to worker {node}", loglevel=logging.DEBUG)
+                _send(command, node) # The command should indicate the worker which function to run on the client
+
+                if command == COMMAND_TESTVAL:
+                    _send(mode,node) # Only for test/val has a value
+                    _send(index, node) # Worker receives the index of the client to pop
+                elif command == COMMAND_TRAIN:
+                    _send(client_to_process, node)
+                print_rank(f"Finished assigning worker {node}, free nodes {free_nodes}", loglevel=logging.DEBUG)
+
+                if dist.get_backend() == "nccl":
+                    append_async_requests(node_request_map, node)
+                    idle_nodes = None
+                else:
+                    idle_nodes = sync_idle_nodes(client_queue, free_nodes)
+    
+                # Waits until receive the output from all ranks
+                if not free_nodes:
+                    print_rank(f"Waiting for a workers, free nodes {free_nodes}, reqs_lst {node_request_map}", loglevel=logging.DEBUG)
+                    while len(free_nodes) == 0:
+                        node_request_map, results_list, free_nodes = receive_workers_output(node_request_map, results_list, free_nodes, command, idle_nodes)
+                        for output in results_list:
+                            yield output
+                        results_list = []
+
+            # Wait for all workers to finish
+            while (len(node_request_map)) != 0:
+                node_request_map, results_list, free_nodes = receive_workers_output(node_request_map, results_list, free_nodes, command, idle_nodes)
+
+                for output in results_list:
+                    yield output
+                results_list = []
+        else:
+            # For a single-GPU execution, there is no P2P communication in the same GPU. Using threats to coordinate.
+            
+            global GLOBAL_MESSAGE
+            GLOBAL_MESSAGE = server_data
 
             if command == COMMAND_TESTVAL:
-                _send(mode,node) # Only for test/val has a value
-                _send(index, node) # Worker receives the index of the client to pop
+                t1 = threading.Thread(target=single_worker.trigger_evaluate)
+                t1.start()
+                t1.join()
+                yield GLOBAL_MESSAGE
             elif command == COMMAND_TRAIN:
-                _send(client_to_process, node)
-            print_rank(f"Finished assigning worker {node}, free nodes {free_nodes}", loglevel=logging.DEBUG)
+                total_clients = clients.copy()
+                
+                for client_id in total_clients:
+                    GLOBAL_MESSAGE = lr, model_params, nround, client_id
+                    t1 = threading.Thread(target=single_worker.trigger_train)
+                    t1.start()
+                    t1.join()
+                    result = GLOBAL_MESSAGE
+                    yield result
 
-            if dist.get_backend() == "nccl":
-                append_async_requests(node_request_map, node)
-                idle_nodes = None
-            else:
-                idle_nodes = sync_idle_nodes(client_queue, free_nodes)
-   
-            # Waits until receive the output from all ranks
-            if not free_nodes:
-                print_rank(f"Waiting for a workers, free nodes {free_nodes}, reqs_lst {node_request_map}", loglevel=logging.DEBUG)
-                while len(free_nodes) == 0:
-                    node_request_map, results_list, free_nodes = receive_workers_output(node_request_map, results_list, free_nodes, command, idle_nodes)
-                    for output in results_list:
-                        yield output
-                    results_list = []
-
-        # Wait for all workers to finish
-        while (len(node_request_map)) != 0:
-            node_request_map, results_list, free_nodes = receive_workers_output(node_request_map, results_list, free_nodes, command, idle_nodes)
-
-            for output in results_list:
-                yield output
-            results_list = []
-        
         if do_profiling:
             profiler.disable()
             print_profiler(profiler)
@@ -361,7 +387,7 @@ class Server:
         torch.cuda.synchronize() if torch.cuda.is_available() else None
 
     @staticmethod
-    def process_clients(clients, server_data):
+    def process_clients(clients, server_data, single_worker):
         """Ask workers to perform training on Clients.
 
         Args:
@@ -372,10 +398,10 @@ class Server:
         Returns:
             Generator of results.
         """
-        return Server.dispatch_clients(clients, server_data, COMMAND_TRAIN)
+        return Server.dispatch_clients(clients, server_data, COMMAND_TRAIN, single_worker=single_worker)
 
     @staticmethod
-    def process_testvalidate(clients, server_data, mode):
+    def process_testvalidate(clients, server_data, mode, single_worker):
         """Ask workers to perform test/val on Clients.
 
         Args:
@@ -388,7 +414,7 @@ class Server:
         """
 
         mode = [-2] if mode == "test" else [2]
-        return Server.dispatch_clients(clients, server_data, COMMAND_TESTVAL, mode)
+        return Server.dispatch_clients(clients, server_data, COMMAND_TESTVAL, mode, single_worker=single_worker)
 
     @staticmethod
     def terminate_workers(terminate=True):
@@ -438,142 +464,190 @@ class Worker:
         and performs different actions on the Client assigned depending on 
         the command received.
         """
-        
-        while True:  # keeps listening for incoming server calls
+        # Single GPU flag
+        single_gpu = True if size()==1 else False
+        print_rank(f"Single GPU flag Client: {single_gpu}", loglevel=logging.DEBUG)
+    
+        if not single_gpu:
+            while True:  # keeps listening for incoming server calls
 
-            # Initialize tensors -- required by torch.distributed
-            command, client_idx, mode = 0, 0, 0  # int
-            lr, nround = torch.zeros(1), torch.zeros(1) # float
+                # Initialize tensors -- required by torch.distributed
+                command, client_idx, mode = 0, 0, 0  # int
+                lr, nround = torch.zeros(1), torch.zeros(1) # float
 
-            # Read command
-            command = _recv(command)
-            print_rank(f"Command received {command} on worker {rank()}", loglevel=logging.DEBUG)
+                # Read command
+                command = _recv(command)
+                print_rank(f"Command received {command} on worker {rank()}", loglevel=logging.DEBUG)
 
-            # Receive server data -- lr, model_params
-            if command == COMMAND_UPDATE:
-                print_rank(f"COMMMAND_UPDATE received {rank()}", loglevel=logging.DEBUG)                
-                lr = _recv(lr, 0)
-                model_params = _recv_gradients(0)
-                nround = _recv(nround, 0)
-                server_data = (lr, model_params, int(nround))
-                print_rank(f"Received lr: {lr} and n_params: {len(model_params)} - round {nround}", loglevel=logging.DEBUG)
-                
-            elif command == COMMAND_TRAIN:
-                print_rank(f"COMMMAND_TRAIN received {rank()}", loglevel=logging.DEBUG)
-                
-                # Init profiler in training worker
-                profiler = None
-                if self.do_profiling:
-                    profiler = cProfile.Profile()
-                    profiler.enable()
-                                
-                # Receive client id from Server
-                client_idx = _recv(client_idx)
-                print_rank(f"Cliend idx received from Server: {client_idx}", loglevel=logging.DEBUG)
+                # Receive server data -- lr, model_params
+                if command == COMMAND_UPDATE:
+                    print_rank(f"COMMMAND_UPDATE received {rank()}", loglevel=logging.DEBUG)                
+                    lr = _recv(lr, 0)
+                    model_params = _recv_gradients(0)
+                    nround = _recv(nround, 0)
+                    server_data = (lr, model_params, int(nround))
+                    print_rank(f"Received lr: {lr} and n_params: {len(model_params)} - round {nround}", loglevel=logging.DEBUG)
+                    
+                elif command == COMMAND_TRAIN:
+                    print_rank(f"COMMMAND_TRAIN received {rank()}", loglevel=logging.DEBUG)
+                    
+                    # Init profiler in training worker
+                    profiler = None
+                    if self.do_profiling:
+                        profiler = cProfile.Profile()
+                        profiler.enable()
+                                    
+                    # Receive client id from Server
+                    client_idx = _recv(client_idx)
+                    print_rank(f"Cliend idx received from Server: {client_idx}", loglevel=logging.DEBUG)
 
-                # Instantiate client
-                client_to_process = Client(
-                        [client_idx],
-                        self.config,
-                        self.config['client_config']['type'] == 'optimization') 
-                
-                # Execute Client.get_data()
-                client_data = client_to_process.get_client_data()
+                    # Instantiate client
+                    client_to_process = Client(
+                            [client_idx],
+                            self.config,
+                            self.config['client_config']['type'] == 'optimization') 
+                    
+                    # Execute Client.get_data()
+                    client_data = client_to_process.get_client_data()
 
-                # Execute Client.process_round()
-                output = client_to_process.process_round(client_data, server_data, self.model, self.data_path)
+                    # Execute Client.process_round()
+                    output = client_to_process.process_round(client_data, server_data, self.model, self.data_path)
 
-                # Send output back to Server
-                if dist.get_backend() == "nccl":
-                    # ASYNC mode -- enabled only for nccl backend
-                    ack = to_device(torch.tensor(1))
-                    dist.isend(tensor=ack, dst=0)
-                    _send_train_output(output)
-                else:
-                    # SYNC mode -- gloo backend does not have a non-blocking way to check if the operation is completed
-                    gather_objects = [output for i in range(size())]
+                    # Send output back to Server
+                    if dist.get_backend() == "nccl":
+                        # ASYNC mode -- enabled only for nccl backend
+                        ack = to_device(torch.tensor(1))
+                        dist.isend(tensor=ack, dst=0)
+                        _send_train_output(output)
+                    else:
+                        # SYNC mode -- gloo backend does not have a non-blocking way to check if the operation is completed
+                        gather_objects = [output for i in range(size())]
+                        output = [None for _ in gather_objects]
+                        dist.all_gather_object(output, gather_objects[rank()])
+
+                    # Some cleanup
+                    torch.cuda.empty_cache()
+                    torch.cuda.synchronize() if torch.cuda.is_available() else None
+
+                    if self.do_profiling:
+                        profiler.disable()
+                        print_profiler(profiler)
+
+                elif command == COMMAND_TESTVAL:
+                    print_rank(f"COMMMAND_TESTVAL received {rank()}", loglevel=logging.DEBUG)
+
+                    # Init profiler in validation worker
+                    profiler = None
+                    if self.do_profiling:
+                        profiler = cProfile.Profile()
+                        profiler.enable()
+                    
+                    # Receive mode and client id from Server
+                    mode = _recv(mode)
+                    mode = "test" if mode == -2 else "val"
+                    client_idx = _recv(client_idx)
+                    print_rank(f"Client idx received from Server: {client_idx}, {mode}", loglevel=logging.DEBUG)
+                    
+                    # Get client and dataset
+                    clients = self.val_clients if mode == "val" else self.test_clients
+                    dataset = self.val_dataset if mode == "val" else self.test_dataset
+                    clients_queue = clients.copy()
+                    assert 0 <= client_idx < len(clients_queue)
+                    client_to_process = clients_queue.pop(client_idx)
+
+                    # Execute Client.get_data()
+                    client_data = client_to_process.get_client_data(dataset)
+    
+                    # Execute Client.run_testvalidate()
+                    output = client_to_process.run_testvalidate(client_data, server_data, mode, self.model)
+
+                    # Send output back to Server
+                    if dist.get_backend() == "nccl":
+                        # ASYNC mode -- enabled only for nccl backend
+                        _, metrics, num_instances = output
+                        metrics['num']= {'value': float(num_instances), 'higher_is_better': False}
+                        output = metrics
+                        print_rank(f"Worker {rank()} output {output}", loglevel=logging.DEBUG)
+                        ack = to_device(torch.tensor(1))
+                        dist.isend(tensor=ack, dst=0)
+                        _send_metrics(output)
+                    else:
+                        # SYNC mode -- gloo backend does not have a non-blocking way to check if the operation is completed
+                        gather_objects = [output for i in range(size())]
+                        output = [None for _ in gather_objects]
+                        dist.all_gather_object(output, gather_objects[rank()])
+                        print_rank(f"Worker {rank()} sent output back", loglevel=logging.DEBUG)
+
+                    # Some cleanup
+                    torch.cuda.empty_cache()
+                    torch.cuda.synchronize() if torch.cuda.is_available() else None
+
+                    if self.do_profiling:
+                        profiler.disable()
+                        print_profiler(profiler)
+
+                elif command == COMMAND_TERMINATE:
+                    print_rank(f"COMMMAND_TERMINATE received {rank()}", loglevel=logging.DEBUG)
+
+                    # Some cleanup
+                    torch.cuda.empty_cache()
+                    torch.cuda.synchronize() if torch.cuda.is_available() else None
+                    return
+
+                elif command == COMMAND_SYNC_NODES: # Only for sync calls
+                    print_rank(f"COMMMAND_SYNC_NODES received {rank()}", loglevel=logging.DEBUG)
+
+                    gather_objects = [None for i in range(size())]
                     output = [None for _ in gather_objects]
                     dist.all_gather_object(output, gather_objects[rank()])
+                    print_rank(f"Worker IDLE {rank()} sent dummy output back", loglevel=logging.DEBUG)
 
-                # Some cleanup
-                torch.cuda.empty_cache()
-                torch.cuda.synchronize() if torch.cuda.is_available() else None
-
-                if self.do_profiling:
-                    profiler.disable()
-                    print_profiler(profiler)
-
-            elif command == COMMAND_TESTVAL:
-                print_rank(f"COMMMAND_TESTVAL received {rank()}", loglevel=logging.DEBUG)
-
-                # Init profiler in validation worker
-                profiler = None
-                if self.do_profiling:
-                    profiler = cProfile.Profile()
-                    profiler.enable()
-                
-                # Receive mode and client id from Server
-                mode = _recv(mode)
-                mode = "test" if mode == -2 else "val"
-                client_idx = _recv(client_idx)
-                print_rank(f"Client idx received from Server: {client_idx}, {mode}", loglevel=logging.DEBUG)
-                
-               # Get client and dataset
-                clients = self.val_clients if mode == "val" else self.test_clients
-                dataset = self.val_dataset if mode == "val" else self.test_dataset
-                clients_queue = clients.copy()
-                assert 0 <= client_idx < len(clients_queue)
-                client_to_process = clients_queue.pop(client_idx)
-
-                # Execute Client.get_data()
-                client_data = client_to_process.get_client_data(dataset)
-   
-                # Execute Client.run_testvalidate()
-                output = client_to_process.run_testvalidate(client_data, server_data, mode, self.model)
-
-                # Send output back to Server
-                if dist.get_backend() == "nccl":
-                    # ASYNC mode -- enabled only for nccl backend
-                    _, metrics, num_instances = output
-                    metrics['num']= {'value': float(num_instances), 'higher_is_better': False}
-                    output = metrics
-                    print_rank(f"Worker {rank()} output {output}", loglevel=logging.DEBUG)
-                    ack = to_device(torch.tensor(1))
-                    dist.isend(tensor=ack, dst=0)
-                    _send_metrics(output)
+                    # Some cleanup
+                    torch.cuda.empty_cache()
+                    torch.cuda.synchronize() if torch.cuda.is_available() else None
                 else:
-                    # SYNC mode -- gloo backend does not have a non-blocking way to check if the operation is completed
-                    gather_objects = [output for i in range(size())]
-                    output = [None for _ in gather_objects]
-                    dist.all_gather_object(output, gather_objects[rank()])
-                    print_rank(f"Worker {rank()} sent output back", loglevel=logging.DEBUG)
+                    assert False, "unknown command"
 
-                # Some cleanup
-                torch.cuda.empty_cache()
-                torch.cuda.synchronize() if torch.cuda.is_available() else None
+    def trigger_evaluate(self):
+        global GLOBAL_MESSAGE
 
-                if self.do_profiling:
-                    profiler.disable()
-                    print_profiler(profiler)
+        lr, model_params, nround = GLOBAL_MESSAGE
+        server_data = (lr, model_params, int(nround))
+        mode = "val"
 
-            elif command == COMMAND_TERMINATE:
-                print_rank(f"COMMMAND_TERMINATE received {rank()}", loglevel=logging.DEBUG)
+        # Get client and dataset
+        clients = self.val_clients if mode == "val" else self.test_clients
+        dataset = self.val_dataset if mode == "val" else self.test_dataset
+        clients_queue = clients.copy()
+        client_to_process = clients_queue.pop()
 
-                # Some cleanup
-                torch.cuda.empty_cache()
-                torch.cuda.synchronize() if torch.cuda.is_available() else None
-                return
+        # Execute Client.get_data()
+        client_data = client_to_process.get_client_data(dataset)
 
-            elif command == COMMAND_SYNC_NODES: # Only for sync calls
-                print_rank(f"COMMMAND_SYNC_NODES received {rank()}", loglevel=logging.DEBUG)
+        # Execute Client.run_testvalidate()
+        output = client_to_process.run_testvalidate(client_data, server_data, mode, self.model)
+        _, metrics, num_instances = output
+        metrics['num']= {'value': float(num_instances), 'higher_is_better': False}
+        GLOBAL_MESSAGE = (_, metrics, num_instances)
 
-                gather_objects = [None for i in range(size())]
-                output = [None for _ in gather_objects]
-                dist.all_gather_object(output, gather_objects[rank()])
-                print_rank(f"Worker IDLE {rank()} sent dummy output back", loglevel=logging.DEBUG)
+        # Some cleanup
+        torch.cuda.empty_cache()
+        torch.cuda.synchronize() if torch.cuda.is_available() else None
+    
+    def trigger_train(self):
+        global GLOBAL_MESSAGE
+        lr, model_params, nround, client_idx = GLOBAL_MESSAGE
+        server_data = (lr, model_params, int(nround))
 
-                # Some cleanup
-                torch.cuda.empty_cache()
-                torch.cuda.synchronize() if torch.cuda.is_available() else None
-            else:
-                assert False, "unknown command"
+        # Instantiate client
+        client_to_process = Client([client_idx], self.config, self.config['client_config']['type'] == 'optimization') 
+    
+        # Execute Client.get_data()
+        client_data = client_to_process.get_client_data()
+
+        # Execute Client.process_round()
+        GLOBAL_MESSAGE = client_to_process.process_round(client_data, server_data, self.model, self.data_path)
+
+        # Some cleanup
+        torch.cuda.empty_cache()
+        torch.cuda.synchronize() if torch.cuda.is_available() else None

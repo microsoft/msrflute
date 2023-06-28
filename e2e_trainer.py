@@ -86,6 +86,7 @@ def run_worker(model_path, config, task, data_path, local_rank, backend):
     """
     model_config = config["model_config"]
     server_config = config["server_config"]
+    client_config = config["client_config"]
 
     # Backend initialization
     WORLD_RANK = federated.rank()
@@ -116,6 +117,20 @@ def run_worker(model_path, config, task, data_path, local_rank, backend):
 
     # Instantiate the Server object on the first thread
     if WORLD_RANK == 0:
+
+        single_worker = None
+        if federated.size() == 1:
+            # For a single-GPU/CPU execution using NCCL, Server and Worker are instantiated in the same GPU.
+            single_worker = federated.Worker(model=model,
+                                        data_path=data_path,
+                                        do_profiling=client_config.get("do_profiling", False),
+                                        val_clients=val_clients,
+                                        test_clients=test_clients,
+                                        val_dataset = val_dataset,
+                                        test_dataset = test_dataset,
+                                        config= config)
+            single_worker.run()
+        
         try:
             print_rank('Server data preparation')
 
@@ -152,6 +167,7 @@ def run_worker(model_path, config, task, data_path, local_rank, backend):
                 config=config,
                 idx_val_clients=idx_val_clients,
                 idx_test_clients=idx_test_clients,
+                single_worker=single_worker,
             )
             log_run_properties(config)
 
@@ -166,7 +182,6 @@ def run_worker(model_path, config, task, data_path, local_rank, backend):
     else:
         # Instantiate client-processing Worker on remaining threads
         print_rank("Worker on node {}: process started".format(WORLD_RANK))
-        client_config = config["client_config"]
         worker = federated.Worker(
             model=model,
             data_path=data_path,

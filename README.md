@@ -7,7 +7,7 @@ Welcome to FLUTE (Federated Learning Utilities for Testing and Experimentation),
 FLUTE is a pytorch-based orchestration environment enabling GPU or CPU-based FL simulations.  The primary goal of FLUTE is to enable researchers to rapidly prototype and validate their ideas.  Features include:
 
 - large scale simulation (millions of clients, sampling tens of thousands per round)
-- multi-GPU and multi-node orchestration
+- single/multi GPU and multi-node orchestration
 - local or global differential privacy
 - model quantization
 - a variety of standard optimizers and aggregation methods
@@ -74,11 +74,19 @@ FLUTE uses torch.distributed API as its main communication backbone, supporting 
 
 After this initial setup, you can use the data created for the integration test for a first local run. Note that this data needs to be download manually inside the `testing` folder, for more instructions please look at [the README file inside `testing`](testing/README.md).
 
+For single-GPU runs:
+
+```
+python -m torch.distributed.run --nproc_per_node=1 e2e_trainer.py -dataPath ./testing -outputPath scratch -config testing/hello_world_nlg_gru.yaml -task nlg_gru -backend nccl
+```
+
+For multi-GPU runs (3 GPUs):
+
 ```
 python -m torch.distributed.run --nproc_per_node=3 e2e_trainer.py -dataPath ./testing -outputPath scratch -config testing/hello_world_nlg_gru.yaml -task nlg_gru -backend nccl
 ```
 
-This config uses 1 node with 3 workers (1 server, 2 clients). The config file `testing/hello_world_nlg_gru.yaml` has some comments explaining the major sections and some important details; essentially, it consists in a very short experiment where a couple of iterations are done for just a few clients. A `scratch` folder will be created containing detailed logs.
+The config file `testing/hello_world_nlg_gru.yaml` has some comments explaining the major sections and some important details; essentially, it consists in a very short experiment where a couple of iterations are done for just a few clients. A `scratch` folder will be created containing detailed logs.
 
 ## Documentation
 

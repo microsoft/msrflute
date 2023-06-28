@@ -20,7 +20,7 @@ run = Run.get_context()
 
 class Evaluation():
 
-    def __init__(self, config, model_path, process_testvalidate, idx_val_clients, idx_test_clients):
+    def __init__(self, config, model_path, process_testvalidate, idx_val_clients, idx_test_clients, single_worker):
 
         self.config = config
         self.model_path = model_path
@@ -29,6 +29,7 @@ class Evaluation():
         self.idx_val_clients = idx_val_clients
         self.idx_test_clients = idx_test_clients
         self.send_dicts = config['server_config'].get('send_dicts', False)
+        self.single_worker = single_worker
         super().__init__()
     
     def run(self, eval_list, req, metric_logger=None):
@@ -155,7 +156,7 @@ class Evaluation():
         total = 0
         self.logits = {'predictions': [], 'probabilities': [], 'labels': []}
         server_data = (0.0, model, 0)
-        for result in self.process_testvalidate(clients, server_data, mode):
+        for result in self.process_testvalidate(clients, server_data, mode, self.single_worker):
             output, metrics, count = result
             val_metrics =  {key: {'value':0, 'higher_is_better': False} for key in metrics.keys()} if total == 0 else val_metrics
  
@@ -190,7 +191,7 @@ def make_eval_clients(dataset, config):
     '''
 
     total = sum(dataset.num_samples)
-    clients = federated.size() - 1
+    clients = federated.size() - 1 if federated.size()>1 else federated.size()
     delta = total / clients + 1
     threshold = delta
     current_users_idxs = list()
