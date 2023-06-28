@@ -8,7 +8,7 @@ For this experiment, we can create a dummy dataset by running the
 script located in `testing/create_data.py` as follows:
 
 ```code
-    python create_data.py -e mlm
+    python create_data.py --task mlm_bert
 ```
 
 A couple of scripts are provided in `utils/preprocessing` for preprocessing .tsv files

@@ -8,7 +8,7 @@ For this experiment, we can create a dummy dataset by running the
 script located in `testing/create_data.py` as follows:
 
 ```code
-    python create_data.py -e nlg
+    python create_data.py --task nlg_gru
 ```
 
 A couple of scripts are provided in `utils/preprocessing` for preprocessing .tsv files
