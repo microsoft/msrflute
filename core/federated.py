@@ -132,9 +132,15 @@ def _send_train_output(output):
     cs_values = [float(cs_v) for cs_v in output['cs'].values()] # cs dict -- values are flatten in 1d array
     pl_values = [float(output['pl']['weight'])] # pl dict
     gradients = output['pl']['gradients'] # gradients are sent independently
-    values = cs_values + [float(output[key]) for key in output.keys() if key not in ['cs','pl']] + pl_values # reorganizing values in the order expected by the Server
+
+    if len(output.keys()) > 9: # DP metrics
+        ps_values = [float(ps_v) for ps_v in output['ps'].values()]
+        values = cs_values + [float(output[key]) for key in output.keys() if key not in ['cs','pl','ps']] + pl_values + ps_values # reorganizing values in the order expected by the Server
+    else:
+        values = cs_values + [float(output[key]) for key in output.keys() if key not in ['cs','pl']] + pl_values # reorganizing values in the order expected by the Server
     
     # Send data
+    _send(int(len(output.keys())),0) # Warn for number of keys
     _send(values, 0)
     _send_gradients(gradients, 0)
 
@@ -144,17 +150,34 @@ def build_grads_dict(node):
     distributed communication. """
 
     # Initialize tensors
-    keys = ['cs','tl','mg','vg','ng','rg','ns','ts','pl']
-    values = [0.0 for i in range(11)] # initializing tensor shape -- 11 is fixed number of keys expected
+    n_keys = 0
+    n_keys = _recv(n_keys,node)
+    print(n_keys)
+
+    if n_keys == 9:
+        keys = ['cs','tl','mg','vg','ng','rg','ns','ts','pl']
+        values = [0.0 for i in range(11)] # initializing tensor shape -- 11 is fixed number of keys expected
+    elif n_keys == 10:
+        keys = ['cs','tl','mg','vg','ng','rg','ns','ts','pl','ps']
+        values = [0.0 for i in range(15)] # When the privacy metrics are enabled
+    elif n_keys == 11:
+        keys = ['cs','tl','mg','vg','ng','rg','ns','wt','ts','pl','ps']
+        values = [0.0 for i in range(16)] # When the privacy metrics are enabled
     
     # Read data
     values = _recv(values,node)
     grads = _recv_gradients(node)
     
-    # Rebuilding original dictionary
     cs_values = [{key: values.pop(0) for key in ['setup','training','full cost']}] # recreating cs dict
-    pl_values = [{'weight':values.pop(), 'gradients': grads}] # recreating pl dict
-    values_list = cs_values + [values.pop(0) for i in range(7)] + pl_values # 7 is fixed length for remaining items
+    # Rebuilding original dictionary
+    if n_keys == 9:
+        pl_values = [{'weight':values.pop(), 'gradients': grads}] # recreating pl dict
+        values_list = cs_values + [values.pop(0) for i in range(7)] + pl_values # 7 is fixed length for remaining items
+    else:
+        ps_values = [{key: values.pop() for key in ['Practical epsilon (Max leakage)','Words percentage above 9000 word rank','Extracted indices percentage','Dropped clients']}]
+        pl_values = [{'weight':values.pop(), 'gradients': grads}] # recreating pl dict
+        values_list = cs_values + [values.pop(0) for i in range(len(values))] + pl_values + ps_values
+
     result = dict(zip(keys,values_list))
 
     # Cast values to original type
