@@ -34,8 +34,8 @@ privacy_metrics_config:
     #     type: adamax
     #     amsgrad: false
 
-# Select the Federated optimizer to use (e.g. DGA or FedAvg)
-strategy: DGA
+# Select the Federated optimizer to use (e.g. DGA, FedAvg or FedProx)
+strategy: FedProx
 
 # Determines all the server-side settings for training and evaluation rounds
 server_config:   
@@ -119,6 +119,7 @@ server_config:
     
 # Dictates the learning parameters for client-side model updates. Train data is defined inside this config.
 client_config:
+    mu: 0.001                                           # Used only for FedProx aggregation method
     meta_learning: basic
     stats_on_smooth_grad: true
     ignore_subtask: false

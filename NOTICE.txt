@@ -42,5 +42,6 @@ This software includes parts of Fast AutoAugment repository (https://github.com/
 Code from the paper "Fast AutoAugment" (Accepted at NeurIPS 2019). This example is licenced 
 under MIT License, you can find a copy of this licence at https://github.com/kakaobrain/fast-autoaugment/blob/master/LICENSE
 
-
-
+This software includes parts of NIID-Bench repository (https://github.com/Xtra-Computing/NIID-Bench).  
+Code from the paper "Federated Learning on Non-IID Data Silos: An Experimental Study". This example is 
+licenced under MIT License, you can find a copy of this licence at https://github.com/Xtra-Computing/NIID-Bench/blob/main/LICENSE

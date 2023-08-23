@@ -12,7 +12,7 @@ dp_config:
 privacy_metrics_config:
     apply_metrics: false                               # cache data to compute additional metrics
 
-# Select the Federated optimizer to use (e.g. DGA or FedAvg)
+# Select the Federated optimizer to use (e.g. DGA, FedAvg or FedProx)
 strategy: FedAvg
 
 # Determines all the server-side settings for training and evaluation rounds

@@ -47,3 +47,8 @@ allowing users to run experiments using a single-GPU worker by instantiating bot
 and clients on the same device. For more documentation about how to run an experiments
 using a single GPU, please refer to the [README](README.md).
 
+
+### New features
+
+- 🌟 Include FedProx aggregation method
+

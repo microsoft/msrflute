@@ -9,7 +9,7 @@ dp_config:
 privacy_metrics_config:
     apply_metrics: false                               # cache data to compute additional metrics
 
-strategy: DGA
+strategy: DGA                                          # Select the Federated optimizer to use (e.g. DGA, FedAvg or FedProx)
 
 server_config:
     wantRL: false                                      # whether to use RL-based meta-optimizers

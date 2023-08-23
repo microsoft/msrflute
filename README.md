@@ -188,6 +188,8 @@ This software includes the model implementation of the FedNewsRec repository (ht
 For more information about third-party OSS licence, please refer to [NOTICE.txt](NOTICE.txt).
 
 This software includes the Data Augmentation scripts of the Fast AutoAugment repository (https://github.com/kakaobrain/fast-autoaugment) to preprocess the data used in the [semisupervision](experiments/semisupervision/dataloaders/cifar_dataset.py) experiment.
+
+This software included the FedProx logic implementation of the NIID-Bench repository (https://github.com/Xtra-Computing/NIID-Bench/tree/main) as Federated aggregation method used in the [trainer](core/trainer.py) object.
 ## Support
 
 You are welcome to open issues on this repository related to bug reports and feature requests.

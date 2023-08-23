@@ -328,8 +328,10 @@ class Trainer(TrainerBase):
 
         if algo_payload == None:
             num_samples_per_epoch, train_loss_per_epoch = self.run_train_epoch(desired_max_samples, apply_privacy_metrics)
-        elif algo_payload['algo'] == 'FedLabels':
+        elif algo_payload['strategy'] == 'FedLabels':
             num_samples_per_epoch, train_loss_per_epoch, algo_computation = self.run_train_epoch_sup(desired_max_samples, apply_privacy_metrics, algo_payload)
+        elif algo_payload['strategy'] == 'FedProx':
+            num_samples_per_epoch, train_loss_per_epoch = self.run_train_epoch_fedprox(desired_max_samples, apply_privacy_metrics, algo_payload)
 
         num_samples += num_samples_per_epoch
         total_train_loss += train_loss_per_epoch
@@ -375,6 +377,93 @@ class Trainer(TrainerBase):
                         indices = to_device(batch["input_ids"])
                     self.cached_batches.append(indices)
                 loss = self.model.loss(batch)
+            loss.backward()
+
+            # Apply gradient clipping
+            if self.max_grad_norm is not None:
+                grad_norm = nn.utils.clip_grad_norm_(self.model.parameters(), self.max_grad_norm)
+
+            # Sum up the gradient power
+            self.estimate_sufficient_stats()
+
+            # Now that the gradients have been scaled, we can apply them
+            if self.optimizer is not None:
+                self.optimizer.step()
+
+            print_rank("step: {}, loss: {}".format(self.step, loss.item()), loglevel=logging.DEBUG)
+
+            # Post-processing in this loop
+            # Sum up the loss
+            sum_train_loss += loss.item()
+
+            # Increment the number of frames processed already
+            if "attention_mask" in batch:
+                num_samples += torch.sum(batch["attention_mask"].detach().cpu() == 1).item()
+            elif "total_frames" in batch:
+                num_samples += batch["total_frames"]
+            else:
+                num_samples += len(batch["x"])
+
+            # Update the counters
+            self.step += 1
+
+        # Take a step in lr_scheduler
+        if self.lr_scheduler is not None:
+            self.lr_scheduler.step()
+
+        return num_samples, sum_train_loss
+    
+    def run_train_epoch_fedprox(self, desired_max_samples=None, apply_privacy_metrics=False, algo_payload=None):
+        """Implementation example for training the model.
+
+        The training process should stop after the desired number of samples is processed.
+
+        Args:
+            desired_max_samples (int): number of samples that you would like to process.
+            apply_privacy_metrics (bool): whether to save the batches used for the round for privacy metrics evaluation.
+            algo_payload (dict): hyperparameters needed to fine-tune FedProx algorithm.
+
+        Returns:
+            2-tuple of (int, float): number of processed samples and total training loss.
+        """
+
+        sum_train_loss = 0.0
+        num_samples = 0
+        self.reset_gradient_power()
+
+        # Reset gradient just in case
+        self.model.zero_grad()
+
+        # FedProx parameters
+        mu = algo_payload['mu']
+        global_model = to_device(copy.deepcopy(self.model))
+        global_weight_collector = list(global_model.parameters())
+
+        train_loader = self.train_dataloader.create_loader()
+        for batch in train_loader:
+            if desired_max_samples is not None and num_samples >= desired_max_samples:
+                break
+
+            # Compute loss
+            if self.optimizer is not None:
+                self.optimizer.zero_grad()
+
+            if self.ignore_subtask is True:
+                loss = self.model.single_task_loss(batch)
+            else:
+                if apply_privacy_metrics:
+                    if "x" in batch:
+                        indices = to_device(batch["x"])
+                    elif "input_ids" in batch:
+                        indices = to_device(batch["input_ids"])
+                    self.cached_batches.append(indices)
+                loss = self.model.loss(batch)
+            
+            # Fedprox regularization term
+            fed_prox_reg = 0.0
+            for param_index, param in enumerate(self.model.parameters()):
+                fed_prox_reg += ((mu / 2) * torch.norm((param - global_weight_collector[param_index]))**2)
+                loss += fed_prox_reg
             loss.backward()
 
             # Apply gradient clipping

@@ -260,7 +260,8 @@ class Client:
         privacy_metrics_config = config.get('privacy_metrics_config', None)
         model_path = config["model_path"]
 
-        StrategyClass = select_strategy(config['strategy'])
+        strategy_algo = config['strategy']
+        StrategyClass = select_strategy(strategy_algo)
         strategy = StrategyClass('client', config)
         print_rank(f'Client successfully instantiated strategy {strategy}', loglevel=logging.DEBUG)
         send_dicts = config['server_config'].get('send_dicts', False)
@@ -358,10 +359,11 @@ class Client:
         # This is where training actually happens
         algo_payload = None
 
-        if semisupervision_config != None:
+        if strategy_algo == 'FedLabels':
             datasets =[get_dataset(data_path, config, task, mode="train", test_only=False, data_strct=data_strcts[i], user_idx=0) for i in range(3)]
-            algo_payload = {'algo':'FedLabels', 'data': datasets, 'iter': iteration, 'config': semisupervision_config}
-
+            algo_payload = {'strategy':'FedLabels', 'data': datasets, 'iter': iteration, 'config': semisupervision_config}
+        elif strategy_algo == 'FedProx':
+            algo_payload = {'strategy':'FedProx', 'mu': client_config.get('mu',0.001)}
         train_loss, num_samples, algo_computation = trainer.train_desired_samples(desired_max_samples=desired_max_samples, apply_privacy_metrics=apply_privacy_metrics, algo_payload = algo_payload)
         print_rank('client={}: training loss={}'.format(client_id[0], train_loss), loglevel=logging.DEBUG)
 
